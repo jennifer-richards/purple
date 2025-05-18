@@ -55,7 +55,7 @@
       </HeadlessListbox>
     </div>
     <div class="mt-8 flow-root">
-      <h2>Documents for assignment</h2>
+      <h2 class="text-black dark:text-gray-300 mb-4">Documents for assignment</h2>
       <DocumentCards
         :documents="filteredDocuments"
         :editors="editors?.toSorted(compareEditors)"
@@ -152,7 +152,7 @@ function compareEditors (a: RpcPerson, b: RpcPerson) {
 }
 
 async function deleteAssignment (assignment: Assignment) {
-  await $fetch(`/api/rpc/assignments/${assignment.id}`, {
+  await $fetch(`/api/rpc/assignments/${assignment.id}/`, {
     method: 'DELETE',
     headers: { 'X-CSRFToken': csrf?.value ?? '' }
   })
