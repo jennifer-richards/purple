@@ -173,8 +173,6 @@ const cookedDocument = computed(() => {
     .map(editor => editor.id)
     .filter(id => typeof id === 'number')
 
-  const shouldLog = props.document.name === 'draft-ietf-foo-bar'
-
   return ({
     ...props.document,
     externalDeadline: props.document.externalDeadline && DateTime.fromJSDate(props.document.externalDeadline),
@@ -191,10 +189,6 @@ const cookedDocument = computed(() => {
 
         const assignedDocuments = props.editorAssignedDocuments?.[id]
         const completeBy = currentTime.value.plus({ days: 7 * pages / teamPagesPerHour / hoursPerWeek })
-
-        if (shouldLog && assignedDocuments && assignmentsPersonIds.includes(id)) {
-          console.log(editor.name, editor.id, assignmentsPersonIds)
-        }
 
         return {
           ...editor,
