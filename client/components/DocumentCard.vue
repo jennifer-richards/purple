@@ -182,7 +182,7 @@ const cookedDocument = computed(() => {
     editors: props.editors
       ?.map(editor => {
         const { id, hoursPerWeek } = editor
-        assert(typeof id === 'number', 'sdfsdf')
+        assert(typeof id === 'number', `expected number was typeof=${typeof id}`)
         assertIsNumber(hoursPerWeek)
         const { pages } = props.document
         assertIsNumber(pages)
