@@ -11,8 +11,8 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("datatracker", "0003_document_intended_std_level"),
-        ("rpc", "0004_populate_capability"),
+        ("datatracker", "0001_initial"),
+        ("rpc", "0001_initial"),
     ]
 
     operations = [
