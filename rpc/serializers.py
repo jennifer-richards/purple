@@ -335,6 +335,8 @@ class ActionHolderSerializer(serializers.ModelSerializer):
 
 
 class AssignmentSerializer(serializers.ModelSerializer):
+    rfc_to_be = RfcToBeSerializer(read_only=True)
+
     class Meta:
         model = Assignment
         fields = [
@@ -540,3 +542,12 @@ class SubmissionListItemSerializer(serializers.Serializer):
     name = serializers.CharField()
     stream = serializers.CharField()
     submitted = serializers.DateTimeField()
+
+
+def check_user_has_role(user, role) -> bool:
+    rpc_person = RpcPerson.objects.filter(
+        datatracker_person=user.datatracker_person()
+    ).first()
+    if rpc_person:
+        return rpc_person.can_hold_role.filter(slug=role).exists()
+    return False
