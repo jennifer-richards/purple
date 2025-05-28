@@ -27,6 +27,7 @@ from .models import (
     RpcDocumentComment,
     Label,
     RpcAuthorComment,
+    ApprovalLogMessage,
 )
 
 admin.site.register(DumpInfo)
@@ -80,6 +81,12 @@ class RfcAuthorAdmin(admin.ModelAdmin):
     search_fields = ["datatracker_person__datatracker_id"]
 
 
+class ApprovalLogMessageAdmin(admin.ModelAdmin):
+    list_display = ["id", "rfc_to_be", "time", "by"]
+    raw_id_fields = ["rfc_to_be", "by"]
+    search_fields = ["rfc_to_be", "by", "log_message"]
+
+
 admin.site.register(RfcAuthor, RfcAuthorAdmin)
 admin.site.register(AdditionalEmail)
 admin.site.register(FinalApproval)
@@ -89,3 +96,4 @@ admin.site.register(RpcRelatedDocument)
 admin.site.register(RpcDocumentComment)
 admin.site.register(Label)
 admin.site.register(RpcAuthorComment)
+admin.site.register(ApprovalLogMessage, ApprovalLogMessageAdmin)

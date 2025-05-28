@@ -314,24 +314,20 @@ class AdditionalEmail(models.Model):
 class FinalApproval(models.Model):
     """Captures approvals for publication
 
-    This model captures who is asked for approval, when they were asked, and
-    when they gave that approval. Lack of an approved date means approval
-    has not been provided.
+    This model captures final approval from an rfc's titlepage authors.
+    Lack of an approved date means approval has not been provided.
 
-    The RPC may need to ask a body, like the IESG, for approval without knowing
-    which person will provide that approval. Body would be non-blank, approver
-    would be None, approved would be None. The body will have a person that
-    approves on their behalf, so once approved is not None, approver will also
-    be not None. Overriding approver will be None when body is used.
+    Sometimes the titlepage author is not a person, such as when it is the IAB.
+    The request for approval from such a body is captured in the body field.
+    Body would be non-blank, approver would be None, approved would be None.
+    A person will provide approval on behalf of that body, so once approved
+    is not None, approver will also be not None. Overriding approver will
+    always be None when body is used.
 
     Overriding approver is used when someone has to step in for whoever is
     pointed to as approver (such as when an author passes away or otherwise
     becomes non-responsive). Overriding approver should never be not None if
     approver is None.
-
-    Some approvals are Auth48 approvals from authors. Any FinalApproval with
-    an approval pointing to the same DatatrackerPerson as a RfcAuthor for that
-    RfcToBe is an Auth48 approval. Such approvals will have a body of "".
     """
 
     rfc_to_be = models.ForeignKey(RfcToBe, on_delete=models.PROTECT)
@@ -552,6 +548,7 @@ class Label(models.Model):
 
     slug = models.CharField(max_length=64)
     is_exception = models.BooleanField(default=False)
+    is_complexity = models.BooleanField(default=False)
     color = models.CharField(
         max_length=7, default="purple", choices=zip(TAILWIND_COLORS, TAILWIND_COLORS)
     )
@@ -581,6 +578,31 @@ class RpcAuthorComment(models.Model):
     def __str__(self):
         return "RpcAuthorComment about {} by {} on {}".format(
             self.datatracker_person,
+            self.by,
+            self.time.strftime("%Y-%m-%d"),
+        )
+
+
+class ApprovalLogMessage(models.Model):
+    """Public log of final approval-related steps
+
+    These messages will be displayed on the approvals
+    views (historically the AUTH48 approvals page) and
+    will be publically visible.
+    """
+
+    rfc_to_be = models.ForeignKey(RfcToBe, on_delete=models.PROTECT)
+    log_message = models.TextField()
+    by = models.ForeignKey(
+        "datatracker.DatatrackerPerson",
+        on_delete=models.PROTECT,
+        related_name="approvallogmessage_by",
+    )
+    time = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return "ApprovalLogMessage for {} by {} on {}".format(
+            self.rfc_to_be,
             self.by,
             self.time.strftime("%Y-%m-%d"),
         )
