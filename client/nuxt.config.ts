@@ -34,6 +34,11 @@ export default defineNuxtConfig({
     credits: false,
     disallow: ['/']
   },
+  runtimeConfig: {
+    public: {
+      cspScriptSrcHashes: '' // comma-separated list
+    }
+  },
   security: {
     // adjusts the defaults, see
     // https://nuxt-security.vercel.app/getting-started/configuration#defaults
@@ -41,17 +46,12 @@ export default defineNuxtConfig({
       contentSecurityPolicy: {
         'img-src': [
           "'self'",
-          "'data:'",
+          'data:',
           '*.ietf.org'
         ],
         'script-src': [
-          "'self'",
-          'https:',
-          // "'unsafe-inline'", ignored because nonce is present; could uncomment to support old browsers
           "'strict-dynamic'",
-          "'nonce-{{nonce}}'",
-          // hash to allow inline script for the "warning" frame injected in staging
-          "'sha256-9d0wX/zjSHgriLlZ2/0kuEndnxQOqKv/OCur9Ty3CGM='"
+          "'nonce-{{nonce}}'"
         ]
       }
     }
