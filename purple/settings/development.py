@@ -1,6 +1,8 @@
 # Copyright The IETF Trust 2024, All Rights Reserved
 """Development-mode Django settings for RPC project"""
 
+from hashlib import sha384
+
 from .base import *
 
 # SECURITY WARNING: keep the secret key used in production secret!
@@ -49,3 +51,16 @@ DATABASES = {
         "PORT": 5432,
     }
 }
+
+# Uncomment to enable caching in development
+# CACHES = {
+#     "default": {
+#         "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+#         "LOCATION": "memcache:11211",
+#         "KEY_PREFIX": "ietf:purple",
+#         "KEY_FUNCTION": lambda key, key_prefix, version: (
+#             f"{key_prefix}:{version}:{sha384(str(key).encode('utf8')).hexdigest()}"
+#         ),
+#         "TIMEOUT": 600,  # 10 minute default timeout
+#     }
+# }
