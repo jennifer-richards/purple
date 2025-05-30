@@ -102,17 +102,14 @@ DATABASES["default"]["CONN_HEALTH_CHECKS"] = _conn_health_checks
 
 # Caches
 #
-# PURPLE_MEMCACHED_LOCATION is a newline-separated list of memcached locations (generally
-# expect only one entry, but memcached allows multiple servers). If not set, fall back to
-# default - caching disabled.
-_memcached_location = _multiline_to_list(
-    os.environ.get("PURPLE_MEMCACHED_LOCATION", "")
-)
-if len(_memcached_location) > 0:
+# Get memcached service host/port from k8s environment vars
+_memcached_host = os.environ.get("MEMCACHED_SERVICE_HOST")
+if _memcached_host is not None:
+    _memcached_port = os.environ.get("MEMCACHED_SERVICE_PORT", "11211")
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
-            "LOCATION": _memcached_location,
+            "LOCATION": f"{_memcached_host}:{_memcached_port}",
             "KEY_PREFIX": "ietf:purple",
             "KEY_FUNCTION": lambda key, key_prefix, version: (
                 f"{key_prefix}:{version}:{sha384(str(key).encode('utf8')).hexdigest()}"
