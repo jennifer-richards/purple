@@ -39,6 +39,7 @@ from .serializers import (
     ClusterSerializer,
     CreateRfcToBeSerializer,
     LabelSerializer,
+    NestedAssignmentSerializer,
     QueueItemSerializer,
     RfcToBeSerializer,
     RpcPersonSerializer,
@@ -140,13 +141,18 @@ class RpcPersonAssignmentViewSet(mixins.ListModelMixin, viewsets.GenericViewSet)
     """
 
     queryset = Assignment.objects.exclude(state="done")
-    serializer_class = AssignmentSerializer
+    serializer_class = NestedAssignmentSerializer
 
     def get_queryset(self):
         user = self.request.user
         req_person_id = self.kwargs["person_id"]
 
-        queryset = super().get_queryset().filter(person_id=req_person_id)
+        queryset = (
+            super()
+            .get_queryset()
+            .select_related("rfc_to_be")
+            .filter(person_id=req_person_id)
+        )
 
         is_manager = check_user_has_role(user, "manager")
         if user.is_superuser or is_manager:

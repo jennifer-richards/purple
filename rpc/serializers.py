@@ -335,8 +335,6 @@ class ActionHolderSerializer(serializers.ModelSerializer):
 
 
 class AssignmentSerializer(serializers.ModelSerializer):
-    rfc_to_be = RfcToBeSerializer(read_only=True)
-
     class Meta:
         model = Assignment
         fields = [
@@ -348,6 +346,10 @@ class AssignmentSerializer(serializers.ModelSerializer):
             "comment",
             "time_spent",
         ]
+
+
+class NestedAssignmentSerializer(AssignmentSerializer):
+    rfc_to_be = RfcToBeSerializer(read_only=True)
 
 
 class LabelSerializer(serializers.ModelSerializer):
