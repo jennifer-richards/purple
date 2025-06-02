@@ -8,8 +8,12 @@
     <div class="space-y-4">
       <DocInfoCard :draft="rfcToBe"/>
       <div class="flex space-x-4">
-        <DocComplexityCard :capabilities="capabilities"/>
-        <DocExceptionsCard :labels="labels"/>
+        <DocComplexityCard :capabilities="capabilitiesWithoutExpedite"/>
+        <DocExceptionsCard
+          :exception-labels="exceptionLabels"
+          :complexity-labels="complexityLabels"
+          :other-capabilities="otherCapabilities"
+        />
       </div>
       <BaseCard>
         <template #header>
@@ -43,7 +47,6 @@
 </template>
 
 <script setup lang="ts">
-
 import type { Capability, Label, RfcToBe } from '~/purple_client'
 import type { Column } from '~/components/DocumentTableTypes'
 
@@ -96,4 +99,17 @@ const { data: labels } = await useAsyncData<Label[]>(
   () => api.labelsList(),
   { default: () => ([]), server: false }
 )
+
+const EXPEDITE_SLUG = "expedite"
+
+const capabilitiesWithoutExpedite = computed(() => capabilities.value.filter(capability => capability.slug !== EXPEDITE_SLUG))
+
+const otherCapabilities = computed(() => capabilities.value.filter(capability => capability.slug === EXPEDITE_SLUG))
+
+const exceptionLabels = computed(() => labels.value.filter((lbl) => lbl.isException))
+
+const complexityLabels = computed(() => labels.value.filter((lbl) => lbl.isComplexity))
+
 </script>
+
+

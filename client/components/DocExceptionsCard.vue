@@ -1,27 +1,42 @@
 <template>
   <BaseCard>
     <template #header>
-      <CardHeader title="Exceptions"/>
+      <CardHeader title="Other"/>
     </template>
 
-    <fieldset>
+    <fieldset className="mt-2">
+      <legend>Exceptions</legend>
+      <p v-if="exceptionLabels.length === 0 && otherCapabilities.length === 0" classList="italic text-sm mt-1">(none)</p>
+      <RpcCheckbox
+        v-for="otherCapability in otherCapabilities"
+        :key="otherCapability.id"
+        :label="otherCapability.slug"/>
       <RpcCheckbox
         v-for="exception in exceptionLabels"
         :key="exception.id"
         :label="exception.slug"/>
     </fieldset>
+
+    <fieldset className="mt-2">
+      <legend>Complexities</legend>
+      <p v-if="complexityLabels.length === 0" classList="italic text-sm mt-1">(none)</p>
+      <RpcCheckbox
+        v-for="complexity in complexityLabels"
+        :key="complexity.id"
+        :label="complexity.slug"/>
+    </fieldset>
   </BaseCard>
 </template>
 
 <script setup lang="ts">
-import type { Label } from '~/purple_client'
+import type { Label, Capability } from '~/purple_client'
 
-type Props = { labels: Label[] }
+type Props = {
+  exceptionLabels: Label[],
+  complexityLabels: Label[]
+  otherCapabilities: Capability[]
+}
 
 const props = defineProps<Props>()
-
-// COMPUTED
-
-const exceptionLabels = computed(() => props.labels.filter((lbl) => lbl.isException))
 
 </script>
