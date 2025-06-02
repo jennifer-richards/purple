@@ -10,11 +10,15 @@
       <RpcCheckbox
         v-for="otherCapability in otherCapabilities"
         :key="otherCapability.id"
-        :label="otherCapability.slug"/>
+        :label="`⚠️ ${otherCapability.slug}`"
+        :desc="otherCapability.desc"
+      />
       <RpcCheckbox
         v-for="exception in exceptionLabels"
         :key="exception.id"
-        :label="exception.slug"/>
+        :label="exception.slug"
+        :desc="exception.desc"
+      />
     </fieldset>
 
     <fieldset className="mt-2">
@@ -23,7 +27,9 @@
       <RpcCheckbox
         v-for="complexity in complexityLabels"
         :key="complexity.id"
-        :label="complexity.slug"/>
+        :label="complexity.slug"
+        :desc="complexity.desc"
+      />
     </fieldset>
   </BaseCard>
 </template>
