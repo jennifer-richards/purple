@@ -4,7 +4,7 @@
       <CardHeader title="Other"/>
     </template>
 
-    <fieldset className="mt-2">
+    <fieldset>
       <legend>Exceptions</legend>
       <p v-if="exceptionLabels.length === 0 && otherCapabilities.length === 0" classList="italic text-sm mt-1">(none)</p>
       <RpcCheckbox
