@@ -7,13 +7,9 @@
 
     <div class="space-y-4">
       <DocInfoCard :draft="rfcToBe"/>
-      <div class="flex space-x-4">
-        <DocComplexityCard :capabilities="capabilitiesWithoutExpedite"/>
-        <DocExceptionsCard
-          :exception-labels="exceptionLabels"
-          :complexity-labels="complexityLabels"
-          :other-capabilities="otherCapabilities"
-        />
+      <div class="flex w-full space-x-4">
+        <DocLabelsCard title="Complexities" :labels="leftLabels" :handle-change="handleChange"/>
+        <DocLabelsCard title="Other" :labels="rightLabels" :handle-change="handleChange"/>
       </div>
       <BaseCard>
         <template #header>
@@ -47,7 +43,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Capability, Label, RfcToBe } from '~/purple_client'
+import type { Label } from '~/purple_client'
 import type { Column } from '~/components/DocumentTableTypes'
 
 const route = useRoute()
@@ -82,17 +78,17 @@ const relatedDocuments = [
   },
 ]
 
-const { data: rfcToBe } = await useAsyncData<RfcToBe>(
-  'rfcToBe',
+const { data: rfcToBe } = await useAsyncData(
+  `rfcToBe${route.params.id.toString()}`,
   () => api.documentsRetrieve({ draftName: route.params.id.toString() }),
   { server: false }
 )
 
-const { data: capabilities } = await useAsyncData<Capability[]>(
-  'capabilities',
-  () => api.capabilitiesList(),
-  { default: () => ([]), server: false }
-)
+// const { data: capabilities } = await useAsyncData<Capability[]>(
+//   'capabilities',
+//   () => api.capabilitiesList(),
+//   { default: () => ([]), server: false }
+// )
 
 const { data: labels } = await useAsyncData<Label[]>(
   'labels',
@@ -100,16 +96,18 @@ const { data: labels } = await useAsyncData<Label[]>(
   { default: () => ([]), server: false }
 )
 
-const EXPEDITE_SLUG = "expedite"
+const leftLabels = computed(() => labels.value.filter((label) => label.isComplexity && !label.isException))
 
-const capabilitiesWithoutExpedite = computed(() => capabilities.value.filter(capability => capability.slug !== EXPEDITE_SLUG))
+const rightLabels = computed(() => labels.value.filter((lbl) => lbl.isException))
 
-const otherCapabilities = computed(() => capabilities.value.filter(capability => capability.slug === EXPEDITE_SLUG))
-
-const exceptionLabels = computed(() => labels.value.filter((lbl) => lbl.isException))
-
-const complexityLabels = computed(() => labels.value.filter((lbl) => lbl.isComplexity))
+const handleChange = (e: Event) => {
+  const { target } = e;
+  if(!(target instanceof HTMLInputElement)) {
+    console.error(e)
+    throw Error(`Unsupported event wasn't from expected element`)
+  }
+  const { value, name, checked } = target
+  console.log({name, value, checked })
+}
 
 </script>
-
-
