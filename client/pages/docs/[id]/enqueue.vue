@@ -7,9 +7,10 @@
 
     <div class="space-y-4">
       <DocInfoCard :draft="rfcToBe"/>
-      <div class="flex space-x-4">
-        <DocComplexityCard :capabilities="capabilities"/>
-        <DocExceptionsCard :labels="labels"/>
+      <div class="flex w-full space-x-4">
+        <DocLabelsCard title="Complexities" v-model="selectedLabelIds" :labels="labels1" />
+        <DocLabelsCard title="Exceptions" v-model="selectedLabelIds" :labels="labels2" />
+        <RpcLabelPicker item-label="slug" v-model="selectedLabelIds" :labels="labels3" />
       </div>
       <BaseCard>
         <template #header>
@@ -43,8 +44,7 @@
 </template>
 
 <script setup lang="ts">
-
-import type { Capability, Label, RfcToBe } from '~/purple_client'
+import { watch } from 'vue'
 import type { Column } from '~/components/DocumentTableTypes'
 
 const route = useRoute()
@@ -79,21 +79,46 @@ const relatedDocuments = [
   },
 ]
 
-const { data: rfcToBe } = await useAsyncData<RfcToBe>(
-  'rfcToBe',
+const id = route.params.id.toString()
+
+const { data: rfcToBe } = await useAsyncData(
+  `rfcToBe${id}`,
   () => api.documentsRetrieve({ draftName: route.params.id.toString() }),
   { server: false }
 )
 
-const { data: capabilities } = await useAsyncData<Capability[]>(
-  'capabilities',
-  () => api.capabilitiesList(),
-  { default: () => ([]), server: false }
-)
+// const { data: capabilities } = await useAsyncData<Capability[]>(
+//   'capabilities',
+//   () => api.capabilitiesList(),
+//   { default: () => ([]), server: false }
+// )
 
-const { data: labels } = await useAsyncData<Label[]>(
+const { data: labels } = await useAsyncData(
   'labels',
   () => api.labelsList(),
   { default: () => ([]), server: false }
 )
+
+const labels1 = computed(() => labels.value.filter((label) => label.isComplexity && !label.isException))
+
+const labels2 = computed(() => labels.value.filter((label) => label.isComplexity && label.isException))
+
+const labels3 = computed(() => labels.value
+  //.filter((label) => !label.isComplexity)
+)
+
+const { data: defaultSelectedLabelIds } = await useAsyncData<number[]>(`user-selection-${id}`, async () => {
+  return [] // FIXME: get user values
+})
+
+const selectedLabelIds = ref(defaultSelectedLabelIds.value ?? [])
+
+watch(
+  selectedLabelIds,
+  async () => {
+    console.log("CHANGE TO SEND TO API", { ids: selectedLabelIds.value ? Array.from(selectedLabelIds.value) : [] })
+  },
+  { deep: true }
+)
+
 </script>
