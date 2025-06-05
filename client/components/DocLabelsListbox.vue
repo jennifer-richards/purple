@@ -4,14 +4,23 @@
       <ListboxGroup class="flex flex-col gap-1">
         <ListboxItem
           v-for="label in props.labels"
-          :key="label.slug"
-          :value="label.slug"
-          class="w-full flex items-center pl-[25px] focus:ring-purple-800 focus:ring-2 rounded relative select-none outline-none data-[disabled]:opacity-50"
+          :key="label.id"
+          :value="label.id!"
+          :class="[
+            'group w-full flex items-center pl-[25px] py-1 focus:ring-purple-800 focus:ring-2 rounded relative select-none outline-none data-[disabled]:opacity-50 rounded-md text-xs font-medium ring-1 ring-inset',
+            label.color && badgeColors[label.color]
+          ]"
         >
-          <ListboxItemIndicator class="absolute left-[2px] w-[17px] text-center">&check;</ListboxItemIndicator>
-          <div class="absolute left-[2px] w-[17px] h-[16px] border border-gray-500 rounded"></div>
-          <span v-if="label.slug === EXPEDITE_SLUG">⚠️</span>
-          <span class="text-sm pl-1 cursor-pointer">{{ label.slug.substring(label.slug.indexOf(SLUG_SEPARATOR) + 1) }}</span>
+          <div class="absolute left-[5px]">
+            <!-- renders an unchecked checkbox -->
+            <CheckboxInert class="group-hover:border-purple-400" />
+          </div>
+          <ListboxItemIndicator class="absolute left-[5px]">
+            <!-- renders an checked checkbox ontop of the one below -->
+            <CheckboxInert checked="true" />
+          </ListboxItemIndicator>
+          <span v-if="label.isException">⚠️</span>
+          <span class="pl-1 cursor-pointer">{{ label.slug.substring(label.slug.indexOf(SLUG_SEPARATOR) + 1) }}</span>
         </ListboxItem>
       </ListboxGroup>
     </ListboxContent>
@@ -19,40 +28,43 @@
 </template>
 
 <script setup lang="ts">
-import { ListboxContent, ListboxGroup, ListboxItem, ListboxItemIndicator, ListboxRoot, type AcceptableValue } from 'reka-ui'
+import { ListboxContent, ListboxGroup, ListboxItem, ListboxItemIndicator, ListboxRoot } from 'reka-ui'
+import type { AcceptableValue } from 'reka-ui'
 import type { Label } from '~/purple_client';
-import { EXPEDITE_SLUG, SLUG_SEPARATOR } from '../utilities/labels'
+import { SLUG_SEPARATOR } from '../utilities/labels'
+import { badgeColors } from '~/utilities/badge'
 import { assert } from '~/utilities/typescript';
 
 type Props = {
   slugGroup: string
   labels: Label[]
-  value: string | undefined
+  value?: number
 }
 
 const props = defineProps<Props>()
 
-const selectedSlugs = defineModel<string[] | null>()
+const selectedLabelIds = defineModel<number[]>()
 
 const handleChange = computed(() => {
   return (value: AcceptableValue): void => {
-    assert(selectedSlugs.value)
+
+    assert(selectedLabelIds.value, `Expected selectedLabelIds.value`)
 
     const eraseExistingGroupSelection = () =>
       props.labels.forEach(label => {
-        assert(selectedSlugs.value)
-        const slugToRemove = label.slug
-        if (selectedSlugs.value.includes(slugToRemove)) {
-          const indexOf = selectedSlugs.value.indexOf(slugToRemove)
-          assert(indexOf !== -1, `Unexpected state. Should be able to find indexOf ${value} in ${JSON.stringify(selectedSlugs.value)}`)
-          selectedSlugs.value?.splice(indexOf, 1)
+        assert(selectedLabelIds.value)
+        assert(label.id)
+        if (selectedLabelIds.value.includes(label.id)) {
+          const indexOf = selectedLabelIds.value.indexOf(label.id)
+          assert(indexOf !== -1, `Unexpected state. Should be able to find indexOf ${label.id} in ${JSON.stringify(selectedLabelIds.value)}`)
+          selectedLabelIds.value?.splice(indexOf, 1)
         }
       })
 
-    if (value && !selectedSlugs.value.includes(value.toString())) {
+    if (value && typeof value === 'number' && !selectedLabelIds.value.includes(value)) {
       eraseExistingGroupSelection()
-      selectedSlugs.value.push(value.toString())
-    } else if (!value) {
+      selectedLabelIds.value.push(value)
+    } else if (value === undefined) {
       eraseExistingGroupSelection()
     }
   }

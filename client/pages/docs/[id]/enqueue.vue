@@ -8,8 +8,9 @@
     <div class="space-y-4">
       <DocInfoCard :draft="rfcToBe"/>
       <div class="flex w-full space-x-4">
-        <DocLabelsCard title="Complexities" :labels="leftLabels" :handle-change="handleChange"/>
-        <DocLabelsCard title="Other" :labels="rightLabels" :handle-change="handleChange"/>
+        <DocLabelsCard title="Complexities" v-model="selectedLabelIds" :labels="labels1" />
+        <DocLabelsCard title="Exceptions" v-model="selectedLabelIds" :labels="labels2" />
+        <RpcLabelPicker item-label="slug" v-model="selectedLabelIds" :labels="labels3" />
       </div>
       <BaseCard>
         <template #header>
@@ -43,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Label } from '~/purple_client'
+import { watch } from 'vue'
 import type { Column } from '~/components/DocumentTableTypes'
 
 const route = useRoute()
@@ -78,8 +79,10 @@ const relatedDocuments = [
   },
 ]
 
+const id = route.params.id.toString()
+
 const { data: rfcToBe } = await useAsyncData(
-  `rfcToBe${route.params.id.toString()}`,
+  `rfcToBe${id}`,
   () => api.documentsRetrieve({ draftName: route.params.id.toString() }),
   { server: false }
 )
@@ -90,24 +93,32 @@ const { data: rfcToBe } = await useAsyncData(
 //   { default: () => ([]), server: false }
 // )
 
-const { data: labels } = await useAsyncData<Label[]>(
+const { data: labels } = await useAsyncData(
   'labels',
   () => api.labelsList(),
   { default: () => ([]), server: false }
 )
 
-const leftLabels = computed(() => labels.value.filter((label) => label.isComplexity && !label.isException))
+const labels1 = computed(() => labels.value.filter((label) => label.isComplexity && !label.isException))
 
-const rightLabels = computed(() => labels.value.filter((lbl) => lbl.isException))
+const labels2 = computed(() => labels.value.filter((label) => label.isComplexity && label.isException))
 
-const handleChange = (e: Event) => {
-  const { target } = e;
-  if(!(target instanceof HTMLInputElement)) {
-    console.error(e)
-    throw Error(`Unsupported event wasn't from expected element`)
-  }
-  const { value, name, checked } = target
-  console.log({name, value, checked })
-}
+const labels3 = computed(() => labels.value
+  //.filter((label) => !label.isComplexity)
+)
+
+const { data: defaultSelectedLabelIds } = await useAsyncData<number[]>(`user-selection-${id}`, async () => {
+  return [] // FIXME: get user values
+})
+
+const selectedLabelIds = ref(defaultSelectedLabelIds.value ?? [])
+
+watch(
+  selectedLabelIds,
+  async () => {
+    console.log("CHANGE TO SEND TO API", { ids: selectedLabelIds.value ? Array.from(selectedLabelIds.value) : [] })
+  },
+  { deep: true }
+)
 
 </script>
