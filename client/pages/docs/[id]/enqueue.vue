@@ -46,6 +46,7 @@
 <script setup lang="ts">
 import { watch } from 'vue'
 import type { Column } from '~/components/DocumentTableTypes'
+import type { RfcToBe } from '~/purple_client'
 
 const route = useRoute()
 const api = useApi()
@@ -79,10 +80,10 @@ const relatedDocuments = [
   },
 ]
 
-const id = route.params.id.toString()
+const id = computed(() => route.params.id.toString())
 
-const { data: rfcToBe } = await useAsyncData(
-  `rfcToBe${id}`,
+const { data: rfcToBe } = await useAsyncData<RfcToBe>(
+  computed(() => `rfcToBe-${id.value}`),
   () => api.documentsRetrieve({ draftName: route.params.id.toString() }),
   { server: false }
 )
@@ -107,9 +108,12 @@ const labels3 = computed(() => labels.value
   //.filter((label) => !label.isComplexity)
 )
 
-const { data: defaultSelectedLabelIds } = await useAsyncData<number[]>(`user-selection-${id}`, async () => {
-  return [] // FIXME: get user values
-})
+const { data: defaultSelectedLabelIds } = await useAsyncData<number[]>(
+  () => `user-selection-${id.value}`,
+  async () => {
+    return [] // FIXME: get user values
+  }
+)
 
 const selectedLabelIds = ref(defaultSelectedLabelIds.value ?? [])
 
