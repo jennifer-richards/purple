@@ -8,10 +8,13 @@ from drf_spectacular.types import OpenApiTypes
 from rest_framework.decorators import (
     action,
     api_view,
-    permission_classes,
 )
 from rest_framework.response import Response
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import (
+    NotAuthenticated,
+    PermissionDenied,
+    NotFound,
+)
 from rest_framework import serializers
 from rest_framework import mixins, views, viewsets
 from drf_spectacular.utils import extend_schema, inline_serializer
@@ -20,6 +23,7 @@ import rpcapi_client
 from datatracker.rpcapi import with_rpcapi
 
 from datatracker.models import Document
+from rpcauth.models import User
 from .models import (
     Assignment,
     Capability,
@@ -32,6 +36,7 @@ from .models import (
     StdLevelName,
     StreamName,
     TlpBoilerplateChoiceName,
+    RpcDocumentComment,
 )
 from .serializers import (
     AssignmentSerializer,
@@ -54,6 +59,7 @@ from .serializers import (
     VersionInfoSerializer,
     UserSerializer,
     check_user_has_role,
+    RfcToBeCommentSerializer,
 )
 from .utils import VersionInfo
 
@@ -388,3 +394,37 @@ class StreamNameViewSet(viewsets.ReadOnlyModelViewSet):
 class TlpBoilerplateChoiceNameViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = TlpBoilerplateChoiceName.objects.all()
     serializer_class = TlpBoilerplateChoiceNameSerializer
+
+
+class RfcToBeCommentViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet,
+):
+    queryset = RpcDocumentComment.objects.filter(document__isnull=True)
+    serializer_class = RfcToBeCommentSerializer
+
+    def get_queryset(self):
+        queryset = (
+            super()
+            .get_queryset()
+            .select_related("rfc_to_be")
+            .filter(rfc_to_be__draft__name=self.kwargs["rfc_to_be_draft_name"])
+        )
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not user.is_authenticated:
+            raise NotAuthenticated
+        dt_person = user.datatracker_person()
+        if dt_person is None or not hasattr(dt_person, "rpcperson"):
+            raise PermissionDenied
+        rfc_to_be = RfcToBe.objects.filter(draft__name=self.kwargs["rfc_to_be_draft_name"]).first()
+        if rfc_to_be is None:
+            raise NotFound
+        # todo permissions check
+        serializer.save(
+            rfc_to_be=rfc_to_be,
+            by=dt_person,
+        )

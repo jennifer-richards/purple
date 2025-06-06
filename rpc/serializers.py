@@ -26,6 +26,7 @@ from .models import (
     SourceFormatName,
     StdLevelName,
     StreamName,
+    RpcDocumentComment,
 )
 
 
@@ -554,3 +555,16 @@ def check_user_has_role(user, role) -> bool:
     if rpc_person:
         return rpc_person.can_hold_role.filter(slug=role).exists()
     return False
+
+
+class RfcToBeCommentSerializer(serializers.ModelSerializer):
+    """Serialize an existing comment on an RfcToBe"""
+
+    class Meta:
+        model = RpcDocumentComment
+        fields = [
+            "comment",
+            "by",
+            "time",
+        ]
+        read_only_fields = ["rfc_to_be", "by", "time"]

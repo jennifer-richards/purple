@@ -51,6 +51,11 @@ router.register(r"assignments", rpc_api.AssignmentViewSet)
 router.register(r"capabilities", rpc_api.CapabilityViewSet)
 router.register(r"clusters", rpc_api.ClusterViewSet)
 router.register(r"documents", rpc_api.RfcToBeViewSet)
+router.register(
+    r"documents/(?P<rfc_to_be_draft_name>[^/.]+)/comments",
+    rpc_api.RfcToBeCommentViewSet,
+    basename="documents-comments",
+)
 router.register(r"labels", rpc_api.LabelViewSet)
 router.register(r"queue", rpc_api.QueueViewSet, basename="queue")
 router.register(r"rpc_person", rpc_api.RpcPersonViewSet)
