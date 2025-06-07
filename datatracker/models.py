@@ -32,8 +32,13 @@ class DatatrackerPerson(models.Model):
     def __str__(self):
         return f"Datatracker Person {self.datatracker_id}"
 
+    @property
+    def plain_name(self):
+        return self._plain_name()
+
     @with_rpcapi
-    def plain_name(self, *, rpcapi: rpcapi_client.DefaultApi):
+    def _plain_name(self, *, rpcapi: rpcapi_client.DefaultApi):
+        """Get plain_name for person (uses cache)"""
         cache_key = f"datatracker_person-{self.datatracker_id}-plain_name"
         no_value = object()
         cached_value = cache.get(cache_key, no_value)

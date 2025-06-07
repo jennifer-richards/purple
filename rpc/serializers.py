@@ -46,7 +46,7 @@ class UserSerializer(serializers.Serializer):
     def get_name(self, user) -> str:
         dt_person = user.datatracker_person()
         if dt_person:
-            return dt_person.plain_name()
+            return dt_person.plain_name
         return str(user)
 
     def get_person_id(self, user) -> Optional[RpcPerson]:
@@ -314,7 +314,7 @@ class RpcPersonSerializer(serializers.ModelSerializer):
         cached_name = self.name_map.get(
             str(rpc_person.datatracker_person.datatracker_id), None
         )
-        return cached_name or rpc_person.datatracker_person.plain_name()
+        return cached_name or rpc_person.datatracker_person.plain_name
 
 
 class ActionHolderSerializer(serializers.ModelSerializer):
@@ -331,7 +331,7 @@ class ActionHolderSerializer(serializers.ModelSerializer):
 
     def get_name(self, actionholder) -> str:
         return (
-            actionholder.datatracker_person.plain_name()
+            actionholder.datatracker_person.plain_name
         )  # allow prefetched name map?
 
 
