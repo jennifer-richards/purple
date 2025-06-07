@@ -518,7 +518,9 @@ class RpcDocumentComment(models.Model):
     document = models.ForeignKey(
         "datatracker.Document", null=True, blank=True, on_delete=models.PROTECT
     )
-    rfc_to_be = models.ForeignKey(RfcToBe, null=True, blank=True, on_delete=models.PROTECT)
+    rfc_to_be = models.ForeignKey(
+        RfcToBe, null=True, blank=True, on_delete=models.PROTECT
+    )
     comment = models.TextField()
     by = models.ForeignKey("datatracker.DatatrackerPerson", on_delete=models.PROTECT)
     time = models.DateTimeField(default=timezone.now)

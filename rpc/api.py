@@ -402,8 +402,12 @@ class TlpBoilerplateChoiceNameViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 @extend_schema_view(
-    list=extend_schema(parameters=[OpenApiParameter("draft_name", OpenApiTypes.STR, "path")]),
-    create=extend_schema(parameters=[OpenApiParameter("draft_name", OpenApiTypes.STR, "path")]),
+    list=extend_schema(
+        parameters=[OpenApiParameter("draft_name", OpenApiTypes.STR, "path")]
+    ),
+    create=extend_schema(
+        parameters=[OpenApiParameter("draft_name", OpenApiTypes.STR, "path")]
+    ),
 )
 class RfcToBeCommentViewSet(
     mixins.ListModelMixin,
@@ -429,7 +433,9 @@ class RfcToBeCommentViewSet(
         dt_person = user.datatracker_person()
         if dt_person is None or not hasattr(dt_person, "rpcperson"):
             raise PermissionDenied
-        rfc_to_be = RfcToBe.objects.filter(draft__name=self.kwargs["draft_name"]).first()
+        rfc_to_be = RfcToBe.objects.filter(
+            draft__name=self.kwargs["draft_name"]
+        ).first()
         if rfc_to_be is None:
             raise NotFound
         # todo permissions check

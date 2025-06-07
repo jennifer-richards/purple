@@ -331,9 +331,7 @@ class ActionHolderSerializer(serializers.ModelSerializer):
         ]
 
     def get_name(self, actionholder) -> str:
-        return (
-            actionholder.datatracker_person.plain_name
-        )  # allow prefetched name map?
+        return actionholder.datatracker_person.plain_name  # allow prefetched name map?
 
 
 class AssignmentSerializer(serializers.ModelSerializer):
