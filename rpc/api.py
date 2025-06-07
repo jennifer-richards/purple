@@ -420,13 +420,12 @@ class RfcToBeCommentViewSet(
     pagination_class = LimitOffsetPagination
 
     def get_queryset(self):
-        queryset = (
-            super()
-            .get_queryset()
-            .select_related("rfc_to_be")
-            .filter(rfc_to_be__draft__name=self.kwargs["draft_name"])
-            .order_by("-time")
-        )
+        rfc_to_be = RfcToBe.objects.filter(
+            draft__name=self.kwargs["draft_name"]
+        ).first()
+        if rfc_to_be is None:
+            raise NotFound
+        queryset = super().get_queryset().filter(rfc_to_be=rfc_to_be).order_by("-time")
         return queryset
 
     def perform_create(self, serializer):
