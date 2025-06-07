@@ -17,7 +17,12 @@ from rest_framework.exceptions import (
 )
 from rest_framework import serializers
 from rest_framework import mixins, views, viewsets
-from drf_spectacular.utils import extend_schema, inline_serializer
+from drf_spectacular.utils import (
+    extend_schema,
+    inline_serializer,
+    extend_schema_view,
+    OpenApiParameter,
+)
 
 import rpcapi_client
 from datatracker.rpcapi import with_rpcapi
@@ -396,6 +401,10 @@ class TlpBoilerplateChoiceNameViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = TlpBoilerplateChoiceNameSerializer
 
 
+@extend_schema_view(
+    list=extend_schema(parameters=[OpenApiParameter("draft_name", OpenApiTypes.STR, "path")]),
+    create=extend_schema(parameters=[OpenApiParameter("draft_name", OpenApiTypes.STR, "path")]),
+)
 class RfcToBeCommentViewSet(
     mixins.ListModelMixin,
     mixins.CreateModelMixin,
@@ -409,7 +418,7 @@ class RfcToBeCommentViewSet(
             super()
             .get_queryset()
             .select_related("rfc_to_be")
-            .filter(rfc_to_be__draft__name=self.kwargs["rfc_to_be_draft_name"])
+            .filter(rfc_to_be__draft__name=self.kwargs["draft_name"])
         )
         return queryset
 
@@ -420,7 +429,7 @@ class RfcToBeCommentViewSet(
         dt_person = user.datatracker_person()
         if dt_person is None or not hasattr(dt_person, "rpcperson"):
             raise PermissionDenied
-        rfc_to_be = RfcToBe.objects.filter(draft__name=self.kwargs["rfc_to_be_draft_name"]).first()
+        rfc_to_be = RfcToBe.objects.filter(draft__name=self.kwargs["draft_name"]).first()
         if rfc_to_be is None:
             raise NotFound
         # todo permissions check
