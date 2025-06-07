@@ -52,6 +52,9 @@ class RfcToBeLabel(models.Model):
     rfctobe = models.ForeignKey("RfcToBe", on_delete=models.CASCADE)
     label = models.ForeignKey("Label", on_delete=models.PROTECT)
 
+    class Meta:
+        verbose_name_plural = "RfcToBe labels"
+
 
 class RfcToBe(models.Model):
     """RPC representation of a pre-publication RFC"""
@@ -100,6 +103,9 @@ class RfcToBe(models.Model):
     labels = models.ManyToManyField("Label", through=RfcToBeLabel)
 
     history = HistoricalRecords(m2m_fields=[labels])
+
+    class Meta:
+        verbose_name_plural = "RfcToBes"
 
     def __str__(self):
         return (
@@ -255,6 +261,9 @@ class Capability(models.Model):
     slug = models.CharField(max_length=32, primary_key=True)
     name = models.CharField(max_length=255)
     desc = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name_plural = "capabilities"
 
     def __str__(self):
         return self.name
