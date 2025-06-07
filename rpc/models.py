@@ -516,9 +516,9 @@ class RpcDocumentComment(models.Model):
     """Private RPC comment about a draft, RFC or RFC-to-be"""
 
     document = models.ForeignKey(
-        "datatracker.Document", null=True, on_delete=models.PROTECT
+        "datatracker.Document", null=True, blank=True, on_delete=models.PROTECT
     )
-    rfc_to_be = models.ForeignKey(RfcToBe, null=True, on_delete=models.PROTECT)
+    rfc_to_be = models.ForeignKey(RfcToBe, null=True, blank=True, on_delete=models.PROTECT)
     comment = models.TextField()
     by = models.ForeignKey("datatracker.DatatrackerPerson", on_delete=models.PROTECT)
     time = models.DateTimeField(default=timezone.now)
