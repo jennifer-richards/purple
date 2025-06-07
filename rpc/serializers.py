@@ -11,6 +11,7 @@ from simple_history.utils import update_change_reason
 from typing import Optional
 from urllib.parse import urljoin
 
+from datatracker.models import DatatrackerPerson
 from .models import (
     ActionHolder,
     Assignment,
@@ -557,11 +558,13 @@ def check_user_has_role(user, role) -> bool:
     return False
 
 
-class CommentBySerializer(serializers.Serializer):
+class CommentBySerializer(serializers.ModelSerializer):
     """Serialize the 'by' field on an RpcDocumentComment"""
 
-    name = serializers.CharField(source="plain_name", read_only=True)
-    rpcperson = serializers.PrimaryKeyRelatedField(allow_null=True, read_only=True)
+    class Meta:
+        model = DatatrackerPerson
+        fields = ["plain_name", "rpcperson"]
+        read_only_fields = ["plain_name", "rpcperson"]
 
 
 class RfcToBeCommentSerializer(serializers.ModelSerializer):
@@ -576,4 +579,4 @@ class RfcToBeCommentSerializer(serializers.ModelSerializer):
             "by",
             "time",
         ]
-        read_only_fields = ["rfc_to_be", "time"]
+        read_only_fields = ["rfc_to_be", "by", "time"]

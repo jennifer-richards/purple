@@ -33,7 +33,7 @@ class DatatrackerPerson(models.Model):
         return f"Datatracker Person {self.datatracker_id}"
 
     @property
-    def plain_name(self):
+    def plain_name(self) -> str:
         return self._plain_name() or "<Unknown>"
 
     @with_rpcapi
