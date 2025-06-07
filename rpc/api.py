@@ -9,6 +9,7 @@ from rest_framework.decorators import (
     action,
     api_view,
 )
+from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.response import Response
 from rest_framework.exceptions import (
     NotAuthenticated,
@@ -416,6 +417,7 @@ class RfcToBeCommentViewSet(
 ):
     queryset = RpcDocumentComment.objects.filter(document__isnull=True)
     serializer_class = RfcToBeCommentSerializer
+    pagination_class = LimitOffsetPagination
 
     def get_queryset(self):
         queryset = (
@@ -423,6 +425,7 @@ class RfcToBeCommentViewSet(
             .get_queryset()
             .select_related("rfc_to_be")
             .filter(rfc_to_be__draft__name=self.kwargs["draft_name"])
+            .order_by("-time")
         )
         return queryset
 
