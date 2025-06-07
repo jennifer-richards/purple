@@ -567,7 +567,7 @@ class CommentBySerializer(serializers.Serializer):
 class RfcToBeCommentSerializer(serializers.ModelSerializer):
     """Serialize a comment on an RfcToBe"""
 
-    by = CommentBySerializer()
+    by = CommentBySerializer(read_only=True)
 
     class Meta:
         model = RpcDocumentComment
@@ -576,4 +576,4 @@ class RfcToBeCommentSerializer(serializers.ModelSerializer):
             "by",
             "time",
         ]
-        read_only_fields = ["rfc_to_be", "by", "time"]
+        read_only_fields = ["rfc_to_be", "time"]
