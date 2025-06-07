@@ -34,7 +34,7 @@ class DatatrackerPerson(models.Model):
 
     @property
     def plain_name(self):
-        return self._plain_name()
+        return self._plain_name() or "<Unknown>"
 
     @with_rpcapi
     def _plain_name(self, *, rpcapi: rpcapi_client.DefaultApi):

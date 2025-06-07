@@ -557,8 +557,17 @@ def check_user_has_role(user, role) -> bool:
     return False
 
 
+class CommentBySerializer(serializers.Serializer):
+    """Serialize the 'by' field on an RpcDocumentComment"""
+
+    name = serializers.CharField(source="plain_name", read_only=True)
+    rpcperson = serializers.PrimaryKeyRelatedField(allow_null=True, read_only=True)
+
+
 class RfcToBeCommentSerializer(serializers.ModelSerializer):
-    """Serialize an existing comment on an RfcToBe"""
+    """Serialize a comment on an RfcToBe"""
+
+    by = CommentBySerializer()
 
     class Meta:
         model = RpcDocumentComment
