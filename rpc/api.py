@@ -415,18 +415,23 @@ class RfcToBeCommentViewSet(
     mixins.CreateModelMixin,
     viewsets.GenericViewSet,
 ):
-    queryset = RpcDocumentComment.objects.filter(document__isnull=True)
+    queryset = RpcDocumentComment.objects.all()
     serializer_class = RfcToBeCommentSerializer
     pagination_class = LimitOffsetPagination
 
     def get_queryset(self):
+        draft_name = self.kwargs["draft_name"]
+        # First, see if we have an RfcToBe for the draft
         rfc_to_be = RfcToBe.objects.filter(
-            draft__name=self.kwargs["draft_name"]
+            draft__name=draft_name
         ).first()
-        if rfc_to_be is None:
-            raise NotFound
-        queryset = super().get_queryset().filter(rfc_to_be=rfc_to_be).order_by("-time")
-        return queryset
+        if rfc_to_be is not None:
+            return super().get_queryset().filter(rfc_to_be=rfc_to_be).order_by("-time")
+        # No RfcToBe exists - see if datatracker knows about the draft
+        draft = self._draft_by_name(draft_name)
+        if draft is not None:
+            return super().get_queryset().filter(document=draft).order_by("-time")
+        raise NotFound
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -435,13 +440,43 @@ class RfcToBeCommentViewSet(
         dt_person = user.datatracker_person()
         if dt_person is None or not hasattr(dt_person, "rpcperson"):
             raise PermissionDenied
+
+        # First, see if we have an RfcToBe for the draft
+        draft_name = self.kwargs["draft_name"]
         rfc_to_be = RfcToBe.objects.filter(
-            draft__name=self.kwargs["draft_name"]
+            draft__name=draft_name
         ).first()
-        if rfc_to_be is None:
+        save_kwargs = {}
+        if rfc_to_be is not None:
+            save_kwargs["rfc_to_be"] = rfc_to_be
+        else:
+            # No RfcToBe exists - see if datatracker knows about the draft
+            draft = self._draft_by_name(draft_name)
+            if draft is not None:
+                save_kwargs["document"] = draft
+        if not save_kwargs:
             raise NotFound
+        save_kwargs["by"] = dt_person
         # todo permissions check
-        serializer.save(
-            rfc_to_be=rfc_to_be,
-            by=dt_person,
+        serializer.save(**save_kwargs)
+
+    @staticmethod
+    @with_rpcapi
+    def _draft_by_name(draft_name, *, rpcapi: rpcapi_client.DefaultApi):
+        drafts = rpcapi.get_drafts_by_names([draft_name])
+        draft_info = drafts.get(draft_name, None)
+        if draft_info is None:
+            return None
+        # todo manage updates if the details below change before draft reaches pubreq!
+        document, _ = Document.objects.get_or_create(
+            datatracker_id=draft_info.id,
+            defaults={
+                "name": draft_info.name,
+                "rev": draft_info.rev,
+                "title": draft_info.title,
+                "stream": draft_info.stream,
+                "pages": draft_info.pages,
+                "intended_std_level": draft_info.intended_std_level or "",
+            },
         )
+        return document
