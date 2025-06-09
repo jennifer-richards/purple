@@ -2,6 +2,7 @@
 
 import datetime
 
+from django.db.models import Q
 from django.http import JsonResponse
 from django_filters import rest_framework as filters
 from drf_spectacular.types import OpenApiTypes
@@ -421,17 +422,10 @@ class RfcToBeCommentViewSet(
 
     def get_queryset(self):
         draft_name = self.kwargs["draft_name"]
-        # First, see if we have an RfcToBe for the draft
-        rfc_to_be = RfcToBe.objects.filter(
-            draft__name=draft_name
-        ).first()
-        if rfc_to_be is not None:
-            return super().get_queryset().filter(rfc_to_be=rfc_to_be).order_by("-time")
-        # No RfcToBe exists - see if datatracker knows about the draft
-        draft = self._draft_by_name(draft_name)
-        if draft is not None:
-            return super().get_queryset().filter(document=draft).order_by("-time")
-        raise NotFound
+        return super().get_queryset().filter(
+            Q(rfc_to_be__draft__name=draft_name)
+            | Q(document__name=draft_name)
+        )
 
     def perform_create(self, serializer):
         user = self.request.user
