@@ -435,12 +435,14 @@ class RfcToBeCommentViewSet(
         if dt_person is None or not hasattr(dt_person, "rpcperson"):
             raise PermissionDenied
 
+        # Get ready to save...
+        save_kwargs = {"by": dt_person}
+
         # First, see if we have an RfcToBe for the draft
         draft_name = self.kwargs["draft_name"]
         rfc_to_be = RfcToBe.objects.filter(
             draft__name=draft_name
         ).first()
-        save_kwargs = {}
         if rfc_to_be is not None:
             save_kwargs["rfc_to_be"] = rfc_to_be
         else:
@@ -450,13 +452,16 @@ class RfcToBeCommentViewSet(
                 save_kwargs["document"] = draft
         if not save_kwargs:
             raise NotFound
-        save_kwargs["by"] = dt_person
         # todo permissions check
         serializer.save(**save_kwargs)
 
     @staticmethod
     @with_rpcapi
     def _draft_by_name(draft_name, *, rpcapi: rpcapi_client.DefaultApi):
+        """Get a datatracker Document for a draft given its name
+
+        n.b., creates a Document object if needed
+        """
         drafts = rpcapi.get_drafts_by_names([draft_name])
         draft_info = drafts.get(draft_name, None)
         if draft_info is None:
