@@ -64,7 +64,7 @@ class RfcToBe(models.Model):
     draft = models.ForeignKey(
         "datatracker.Document", null=True, on_delete=models.PROTECT
     )
-    rfc_number = models.PositiveIntegerField(null=True)
+    rfc_number = models.PositiveIntegerField(null=True, unique=True)
 
     submitted_format = models.ForeignKey("SourceFormatName", on_delete=models.PROTECT)
     submitted_std_level = models.ForeignKey(
@@ -111,6 +111,15 @@ class RfcToBe(models.Model):
         return (
             f"RfcToBe for {self.draft if self.rfc_number is None else self.rfc_number}"
         )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["rfc_number"],
+                name="unique_non_null_rfc_number",
+                nulls_distinct=True,
+            )
+        ]
 
     @dataclass
     class Interval:
