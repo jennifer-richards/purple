@@ -11,8 +11,8 @@ Based on https://tailwindui.com/components/application-ui/lists/feeds#component-
   >
   </div>
   <img
-    v-if="comment.by?.avatar"
-    :src="comment.by.avatar"
+    v-if="comment.by?.picture"
+    :src="comment.by.picture"
     alt=""
     class="relative mt-3 h-6 w-6 flex-none rounded-full bg-gray-50"
   />
@@ -79,8 +79,8 @@ Based on https://tailwindui.com/components/application-ui/lists/feeds#component-
 </template>
 
 <script setup lang="ts">
-import type { PaginatedDocumentCommentList } from '~/purple_client'
-import { snackbarForErrors } from '~/utilities/snackbar'
+import type {PaginatedDocumentCommentList} from '~/purple_client'
+import {snackbarForErrors} from '~/utilities/snackbar'
 
 type Props = {
   draftName: string
@@ -114,8 +114,7 @@ const handleEdit = () => {
 }
 
 const isEditedByAnotherUser = computed(()=>
-  // TODO: this just compares name strings, but should be changed to user ids when available
-  props.comment.lastEdit?.by?.name !== props.comment.by?.name
+    props.comment.lastEdit?.by?.personId !== props.comment.by?.personId
 )
 
 const snackbar = useSnackbar()

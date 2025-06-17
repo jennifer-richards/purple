@@ -8,8 +8,6 @@ from django.conf import settings
 from itertools import pairwise
 
 from django.contrib.auth import get_user_model
-from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework.fields import empty
 from simple_history.models import ModelDelta
@@ -44,32 +42,34 @@ class VersionInfoSerializer(serializers.Serializer):
     dump_timestamp = serializers.DateTimeField(required=False, read_only=True)
 
 
-class UserSerializer(serializers.ModelSerializer):
-    """Serialize a User record"""
+class DatatrackerPersonSerializer(serializers.ModelSerializer):
+    """Serialize a DatatrackerPerson"""
 
-    name = serializers.CharField(source="datatracker_person.plain_name")
-    person_id = serializers.PrimaryKeyRelatedField(
-        source="datatracker_person", read_only=True
-    )
+    person_id = serializers.IntegerField(source="id")
+    name = serializers.CharField(source="plain_name", read_only=True)
 
     class Meta:
-        model = get_user_model()
-        fields = ["name", "person_id", "avatar"]
+        model = DatatrackerPerson
+        fields = ["person_id", "name", "rpcperson", "picture"]
+        read_only_fields = ["rpcperson"]
 
 
 @dataclass
 class HistoryRecord:
     id: int
     date: datetime.datetime
-    by: str
+    by: Optional[DatatrackerPerson]
     desc: str
 
     @classmethod
     def from_simple_history(cls, sh, desc):
+        dt_person = (
+            None if sh.history_user is None else sh.history_user.datatracker_person()
+        )
         return cls(
             id=sh.id,
             date=sh.history_date,
-            by=sh.history_user,
+            by=dt_person,
             desc=desc,
         )
 
@@ -116,7 +116,7 @@ class HistorySerializer(serializers.Serializer):
 
     id = serializers.IntegerField()
     time = serializers.DateTimeField(source="date")
-    by = UserSerializer()
+    by = DatatrackerPersonSerializer()
     desc = serializers.CharField()
 
     class Meta:
@@ -136,7 +136,9 @@ class HistorySerializer(serializers.Serializer):
 class HistoryLastEditSerializer(serializers.Serializer):
     """Serialize the most recent change in a HistoricalRecord"""
 
-    by = UserSerializer(source="history_user", read_only=True)
+    by = DatatrackerPersonSerializer(
+        source="history_user.datatracker_person", read_only=True
+    )
     time = serializers.DateTimeField(source="history_date", read_only=True)
 
     def __init__(self, instance=None, data=empty, **kwargs):
@@ -581,26 +583,10 @@ def check_user_has_role(user, role) -> bool:
     return False
 
 
-class CommentBySerializer(serializers.ModelSerializer):
-    """Serialize the 'by' field on an RpcDocumentComment"""
-
-    name = serializers.CharField(source="plain_name", read_only=True)
-    avatar = serializers.SerializerMethodField(read_only=True)
-
-    class Meta:
-        model = DatatrackerPerson
-        fields = ["name", "rpcperson", "avatar"]
-        read_only_fields = ["rpcperson"]
-
-    @extend_schema_field(OpenApiTypes.URI)
-    def get_avatar(self, datatracker_person):
-        return None  # todo get the avatar when we plumb it
-
-
 class DocumentCommentSerializer(serializers.ModelSerializer):
     """Serialize a comment on an RfcToBe"""
 
-    by = CommentBySerializer(read_only=True)
+    by = DatatrackerPersonSerializer(read_only=True)
     last_edit = HistoryLastEditSerializer(read_only=True)
 
     class Meta:
