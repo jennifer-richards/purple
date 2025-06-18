@@ -35,6 +35,7 @@ from .models import (
     Cluster,
     Label,
     RfcToBe,
+    RfcAuthor,
     RpcPerson,
     RpcRole,
     SourceFormatName,
@@ -65,6 +66,8 @@ from .serializers import (
     VersionInfoSerializer,
     check_user_has_role,
     DocumentCommentSerializer,
+    RfcAuthorSerializer,
+    CreateRfcAuthorSerializer,
 )
 from .utils import VersionInfo
 
@@ -336,6 +339,27 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
         in_progress = RfcToBe.objects.filter(disposition_id="in_progress")
         serializer = self.get_serializer(in_progress, many=True)
         return Response(serializer.data)
+
+
+class RpcAuthorViewSet(viewsets.ModelViewSet):
+    def get_queryset(self):
+        return RfcAuthor.objects.filter(
+            rfc_to_be__draft__name=self.kwargs["draft_name"]
+        )
+
+    def perform_create(self, serializer):
+        rfc_to_be = RfcToBe.objects.filter(
+            draft__name=self.kwargs["draft_name"]
+        ).first()
+        if rfc_to_be is None:
+            raise NotFound("RfcToBe with the given draft name does not exist")
+        serializer.save(rfc_to_be=rfc_to_be)
+
+    def get_serializer_class(self):
+        """Use different serializer for create vs other operations"""
+        if self.action == "create":
+            return CreateRfcAuthorSerializer
+        return RfcAuthorSerializer
 
 
 class LabelViewSet(viewsets.ModelViewSet):
