@@ -24,10 +24,10 @@ from drf_spectacular.utils import (
     extend_schema_view,
     OpenApiParameter,
 )
-
 import rpcapi_client
-from datatracker.rpcapi import with_rpcapi
+from rules.contrib.rest_framework import AutoPermissionViewSetMixin
 
+from datatracker.rpcapi import with_rpcapi
 from datatracker.models import Document
 from .models import (
     Assignment,
@@ -423,6 +423,7 @@ class TlpBoilerplateChoiceNameViewSet(viewsets.ReadOnlyModelViewSet):
     ),
 )
 class DocumentCommentViewSet(
+    AutoPermissionViewSetMixin,
     mixins.ListModelMixin,
     mixins.CreateModelMixin,
     mixins.UpdateModelMixin,
@@ -458,7 +459,7 @@ class DocumentCommentViewSet(
         if not user.is_authenticated:
             raise NotAuthenticated
         dt_person = user.datatracker_person()
-        if dt_person is None or not hasattr(dt_person, "rpcperson"):
+        if dt_person is None:
             raise PermissionDenied
 
         # Get ready to save...
