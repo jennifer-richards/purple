@@ -90,6 +90,18 @@ spec:
             runAsUser: 1000
             runAsGroup: 1000
         # -----------------------------------------------------
+        # Statics Container
+        # -----------------------------------------------------
+        - name: statics
+          image: "ghcr.io/ietf-tools/purple-statics:$APP_IMAGE_TAG"
+          imagePullPolicy: Always
+          livenessProbe:
+            httpGet:
+              port: 8042
+              path: /
+          securityContext:
+            readOnlyRootFilesystem: true
+        # -----------------------------------------------------
         # Nginx Container
         # -----------------------------------------------------
         - name: nginx
