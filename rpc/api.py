@@ -341,10 +341,29 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+@extend_schema_view(
+    **{
+        action: extend_schema(
+            parameters=[OpenApiParameter("draft_name", OpenApiTypes.STR, "path")]
+        )
+        for action in [
+            "list",
+            "retrieve",
+            "create",
+            "update",
+            "partial_update",
+            "destroy",
+        ]
+    }
+)
 class RpcAuthorViewSet(viewsets.ModelViewSet):
+    queryset = RfcAuthor.objects.all()
+
     def get_queryset(self):
-        return RfcAuthor.objects.filter(
-            rfc_to_be__draft__name=self.kwargs["draft_name"]
+        return (
+            super()
+            .get_queryset()
+            .filter(rfc_to_be__draft__name=self.kwargs["draft_name"])
         )
 
     def perform_create(self, serializer):
@@ -433,18 +452,17 @@ class TlpBoilerplateChoiceNameViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 @extend_schema_view(
-    list=extend_schema(
-        parameters=[OpenApiParameter("draft_name", OpenApiTypes.STR, "path")]
-    ),
-    update=extend_schema(
-        parameters=[OpenApiParameter("draft_name", OpenApiTypes.STR, "path")]
-    ),
-    partial_update=extend_schema(
-        parameters=[OpenApiParameter("draft_name", OpenApiTypes.STR, "path")]
-    ),
-    create=extend_schema(
-        parameters=[OpenApiParameter("draft_name", OpenApiTypes.STR, "path")]
-    ),
+    **{
+        action: extend_schema(
+            parameters=[OpenApiParameter("draft_name", OpenApiTypes.STR, "path")]
+        )
+        for action in [
+            "list",
+            "create",
+            "update",
+            "partial_update",
+        ]
+    }
 )
 class DocumentCommentViewSet(
     AutoPermissionViewSetMixin,
