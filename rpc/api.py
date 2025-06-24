@@ -2,6 +2,7 @@
 
 import datetime
 
+from django.db import transaction
 from django.db.models import Q
 from django.http import JsonResponse
 from django_filters import rest_framework as filters
@@ -37,6 +38,7 @@ from .models import (
     RfcToBe,
     RfcAuthor,
     RpcPerson,
+    RpcRelatedDocument,
     RpcRole,
     SourceFormatName,
     StdLevelName,
@@ -55,6 +57,7 @@ from .serializers import (
     QueueItemSerializer,
     RfcToBeSerializer,
     RpcPersonSerializer,
+    RpcRelatedDocumentSerializer,
     RpcRoleSerializer,
     SubmissionListItemSerializer,
     Submission,
@@ -69,7 +72,7 @@ from .serializers import (
     RfcAuthorSerializer,
     CreateRfcAuthorSerializer,
 )
-from .utils import VersionInfo
+from .utils import VersionInfo, create_rpc_related_document
 
 
 @api_view(["GET"])
@@ -274,9 +277,56 @@ def import_submission(request, document_id, rpcapi: rpcapi_client.DefaultApi):
         )
 
     # Create the RfcToBe
-    serializer = CreateRfcToBeSerializer(data=request.data, context={"draft": draft})
+    serializer = CreateRfcToBeSerializer(data=request.data | {"draft": draft.pk})
     if serializer.is_valid():
-        rfctobe = serializer.save()
+        with transaction.atomic():
+            rfctobe = serializer.save()
+
+            # Find normative references and store them as RelatedDocs
+            # Get ref list from Datatracker
+            response = rpcapi.get_draft_references(document_id)
+            references = response.references
+            # Filter out I-Ds that already have an RfcToBe
+            already_in_queue = dict(
+                RfcToBe.objects.filter(
+                    draft__datatracker_id__in=[s.id for s in references],
+                    disposition__slug__in=("created", "in_progress"),
+                ).values_list("draft__datatracker_id", "pk")
+            )
+            rfc_to_be_exists = RfcToBe.objects.filter(
+                draft__datatracker_id__in=[s.id for s in references],
+            ).values_list("draft__datatracker_id", flat=True)
+            for reference in references:
+                # Create a RelatedDoc for each normative reference
+                if reference.id not in rfc_to_be_exists:
+                    # Get the draft for the reference, otherwise create it
+                    try:
+                        draft = Document.objects.get(datatracker_id=reference.id)
+                    except Document.DoesNotExist:
+                        draft_info = rpcapi.get_draft_by_id(reference.id)
+                        if draft_info is None:
+                            raise NotFound("Unable to get draft info for reference")
+                        draft, _ = Document.objects.get_or_create(
+                            datatracker_id=reference.id,
+                            defaults={
+                                "name": draft_info.name,
+                                "rev": draft_info.rev,
+                                "title": draft_info.title,
+                                "stream": draft_info.stream,
+                                "pages": draft_info.pages,
+                                "intended_std_level": draft_info.intended_std_level,
+                            },
+                        )
+                    create_rpc_related_document("missref", rfctobe.pk, draft.pk)
+
+                if reference.id in already_in_queue:
+                    create_rpc_related_document(
+                        "refqueue",
+                        rfctobe.pk,
+                        already_in_queue[reference.id],
+                        "rfctobe",
+                    )
+
         return Response(RfcToBeSerializer(rfctobe).data)
     else:
         return Response(serializer.errors, status=400)
@@ -379,6 +429,15 @@ class RpcAuthorViewSet(viewsets.ModelViewSet):
         if self.action == "create":
             return CreateRfcAuthorSerializer
         return RfcAuthorSerializer
+
+
+class RpcRelatedDocumentViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = RpcRelatedDocumentSerializer
+
+    def get_queryset(self):
+        return RpcRelatedDocument.objects.filter(
+            source__draft__name=self.kwargs["draft_name"]
+        )
 
 
 class LabelViewSet(viewsets.ModelViewSet):
