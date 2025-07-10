@@ -762,7 +762,19 @@ class DatatrackerPersonModelShim:
         )
 
 
-@extend_schema_view(get=extend_schema(operation_id="search_datatrackerpersons"))
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="search_datatrackerpersons",
+        parameters=[
+            OpenApiParameter(
+                name="search",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description="Name/email fragment for the search",
+            ),
+        ],
+    ),
+)
 class SearchDatatrackerPersons(ListAPIView):
     """Datatracker person search API
 
@@ -771,22 +783,15 @@ class SearchDatatrackerPersons(ListAPIView):
 
     # Warning: this is a tricky view!
     #
-    # Rather than querying the database, the `get_queryset()` method makes a
-    # datatracker API call
-    # to perform the Person search. It uses the same pagination limit/offset on the
-    # API call as the
-    # downstream request being handled. The paginated results from the API call are
-    # packaged in
-    # the PaginationPassthroughWrapper. This acts as a shim to let DRF's pagination
-    # internals work
-    # with the already-paginated results as though they came from a local database
-    # lookup.
-    #
-    # Note that despite the naming, DRF APIViews and pagination explicitly support
-    # using a list
-    # rather than a Django queryset. We need the shim because the list we get from
-    # the API only
-    # contains a single page of results.
+    # Rather than querying the database, the `get_queryset()` method makes a datatracker
+    # API call to perform the Person search. It uses the same pagination limit/offset on
+    # the API call as the downstream request being handled. The paginated results from
+    # the API call are packaged in the PaginationPassthroughWrapper. This acts as a shim
+    # to let DRF's pagination internals work with the already-paginated results as
+    # though they came from a local database lookup.# Note that despite the naming, DRF
+    # APIViews and pagination explicitly support using a list rather than a Django
+    # queryset. We need the shim because the list we get from the API only contains a
+    # single page of results.
 
     serializer_class = BaseDatatrackerPersonSerializer
     pagination_class = SearchDatatrackerPersonsPagination
