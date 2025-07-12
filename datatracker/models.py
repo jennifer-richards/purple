@@ -4,7 +4,8 @@ from django.core.cache import cache
 from django.db import models
 from simple_history.models import HistoricalRecords
 
-from datatracker.rpcapi import with_rpcapi
+from .rpcapi import with_rpcapi
+from .utils import build_datatracker_url
 
 
 class DatatrackerPersonQuerySet(models.QuerySet):
@@ -56,8 +57,19 @@ class DatatrackerPerson(models.Model):
         return self._fetch("plain_name") or "<Unknown>"
 
     @property
+    def email(self) -> str:
+        return self._fetch("email") or "<Unknown>"
+
+    @property
     def picture(self) -> str:
         return self._fetch("picture")
+
+    @property
+    def url(self) -> str:
+        url = self._fetch("url")
+        if url:
+            url = build_datatracker_url(url)
+        return url
 
     @with_rpcapi
     def _fetch(self, field_name, *, rpcapi: rpcapi_client.PurpleApi):
