@@ -1,10 +1,7 @@
 <template>
   <div>
-    <TitleBlock
-      class="pb-3"
-      :title="`Prep for Queue: ${rfcToBe?.name || '&hellip;'}`"
-      summary="Ready the incoming document for the editing queue."
-    />
+    <TitleBlock class="pb-3" :title="`Prep for Queue: ${rfcToBe?.name || '&hellip;'}`"
+      summary="Ready the incoming document for the editing queue." />
 
     <div class="space-y-4">
       <DocInfoCard :draft="rfcToBe" />
@@ -12,115 +9,48 @@
         <div class="flex flex-col">
           <h2 class="font-bold text-lg border border-gray-200 pl-6 pt-4 pb-2 bg-white rounded-t-xl">Complexities</h2>
           <div class="flex flex-row">
-            <DocLabelsCard
-              title="Other complexities"
-              v-model="selectedLabelIds"
-              :labels="labels1"
-            />
-            <DocLabelsCard
-              title="Exceptions"
-              v-model="selectedLabelIds"
-              :labels="labels2"
-            />
+            <DocLabelsCard title="Other complexities" v-model="selectedLabelIds" :labels="labels1" />
+            <DocLabelsCard title="Exceptions" v-model="selectedLabelIds" :labels="labels2" />
           </div>
         </div>
-        <RpcLabelPicker
-          item-label="slug"
-          v-model="selectedLabelIds"
-          :labels="labels3"
-        />
+        <RpcLabelPicker item-label="slug" v-model="selectedLabelIds" :labels="labels3" />
       </div>
-      <BaseCard>
-        <template #header>
-          <CardHeader title="Document Dependencies">
-            <template #actions>
-              <BaseButton btn-type="default">Add Dependency</BaseButton>
-            </template>
-          </CardHeader>
-        </template>
-        <DocumentTable
-          :columns="columns"
-          :data="relatedDocuments"
-          row-key="name"
-        />
-      </BaseCard>
+      <DocumentDependencies v-model="relatedDocuments" :draft-name="id" ></DocumentDependencies>
       <BaseCard>
         <template #header>
           <CardHeader title="Comments" />
         </template>
-        <div
-          v-if="rfcToBe && rfcToBe.id"
-          class="flex flex-col items-center space-y-4"
-        >
-          <RpcTextarea
-            v-if="rfcToBe"
-            :draft-name="id"
-            :reload-comments="commentsReload"
-            class="w-4/5 min-w-100"
-          />
-          <DocumentComments
-            :draft-name="id"
-            :rfc-to-be-id="rfcToBe.id"
-            :is-loading="commentsPending"
-            :error="commentsError"
-            :comment-list="commentList"
-            :reload-comments="commentsReload"
-            class="w-3/5 min-w-100"
-          />
+        <div v-if="rfcToBe && rfcToBe.id" class="flex flex-col items-center space-y-4">
+          <RpcTextarea v-if="rfcToBe" :draft-name="id" :reload-comments="commentsReload" class="w-4/5 min-w-100" />
+          <DocumentComments :draft-name="id" :rfc-to-be-id="rfcToBe.id" :is-loading="commentsPending"
+            :error="commentsError" :comment-list="commentList" :reload-comments="commentsReload"
+            class="w-3/5 min-w-100" />
         </div>
       </BaseCard>
 
       <div class="justify-end flex space-x-4">
-        <BaseButton btn-type="default"
-          >Document has exceptions&mdash;escalate</BaseButton
-        >
+        <BaseButton btn-type="default">Document has exceptions&mdash;escalate</BaseButton>
         <BaseButton btn-type="default">Add to queue</BaseButton>
       </div>
     </div>
+
   </div>
 </template>
 
 <script setup lang="ts">
 import { watch } from 'vue'
-import type { Column } from '~/components/DocumentTableTypes'
 import type { RfcToBe } from '~/purple_client'
 
 const route = useRoute()
 const api = useApi()
 
-const columns: Column[] = [
-  {
-    key: 'name',
-    label: 'Document',
-    field: 'name',
-    classes: 'text-sm font-medium'
-  },
-  {
-    key: 'relationship',
-    label: 'Relationship',
-    field: 'relationship',
-    classes: 'text-sm font-medium'
-  },
-  {
-    key: 'currentState',
-    label: 'Current State',
-    field: 'currentState',
-    classes: 'text-sm font-medium'
-  }
-]
-
-const relatedDocuments = [
-  {
-    name: 'draft-some-other-draft',
-    relationship: 'Normative Reference',
-    currentState: 'Active WG document'
-  }
-]
 
 const id = computed(() => route.params.id.toString())
 
+const rfcToBeKey = computed(() => `rfcToBe-${id.value}`)
+
 const { data: rfcToBe } = await useAsyncData<RfcToBe>(
-  computed(() => `rfcToBe-${id.value}`),
+  rfcToBeKey,
   () => api.documentsRetrieve({ draftName: route.params.id.toString() }),
   { server: false }
 )
@@ -131,10 +61,14 @@ const { data: rfcToBe } = await useAsyncData<RfcToBe>(
 //   { default: () => ([]), server: false }
 // )
 
-const { data: labels } = await useAsyncData('labels', () => api.labelsList(), {
-  default: () => [],
-  server: false
-})
+const { data: labels } = await useAsyncData(
+  `labels`,
+  () => api.labelsList(),
+  {
+    default: () => [],
+    server: false
+  }
+)
 
 const labels1 = computed(() =>
   labels.value.filter((label) => label.isComplexity && !label.isException)
@@ -148,14 +82,7 @@ const labels3 = computed(
   () => labels.value.filter((label) => !label.isComplexity)
 )
 
-const { data: defaultSelectedLabelIds } = await useAsyncData<number[]>(
-  () => `user-selection-${id.value}`,
-  async () => {
-    return [] // FIXME: get user values
-  }
-)
-
-const selectedLabelIds = ref(defaultSelectedLabelIds.value ?? [])
+const selectedLabelIds = ref(rfcToBe.value?.labels ?? [])
 
 watch(
   selectedLabelIds,
@@ -168,15 +95,28 @@ watch(
   { deep: true }
 )
 
-const key = computed(() => `comments-${id.value}`)
+const draftCommentsKey = computed(() => `comments-${id.value}`)
 
 const {
   data: commentList,
   pending: commentsPending,
   error: commentsError,
   refresh: commentsReload
-} = await useAsyncData(key, () =>
-  api.documentsCommentsList({ draftName: id.value })
+} = await useAsyncData(
+  draftCommentsKey,
+  () => api.documentsCommentsList({ draftName: id.value })
 )
+
+const relatedDocumentsKey = computed(() => `references-${id.value}`)
+
+const { data: relatedDocuments } = await useAsyncData(
+  relatedDocumentsKey,
+  () => api.documentsReferencesList({
+    draftName: id.value
+  }),
+  {
+    default: () => [],
+    server: false,
+  })
 
 </script>
