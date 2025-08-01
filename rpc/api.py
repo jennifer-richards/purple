@@ -64,6 +64,7 @@ from .serializers import (
     CreateRpcRelatedDocumentSerializer,
     DocumentCommentSerializer,
     LabelSerializer,
+    NameSerializer,
     NestedAssignmentSerializer,
     QueueItemSerializer,
     RfcAuthorSerializer,
@@ -71,13 +72,9 @@ from .serializers import (
     RpcPersonSerializer,
     RpcRelatedDocumentSerializer,
     RpcRoleSerializer,
-    SourceFormatNameSerializer,
-    StdLevelNameSerializer,
-    StreamNameSerializer,
     Submission,
     SubmissionListItemSerializer,
     SubmissionSerializer,
-    TlpBoilerplateChoiceNameSerializer,
     VersionInfoSerializer,
     check_user_has_role,
 )
@@ -657,24 +654,29 @@ class StatsLabels(views.APIView):
         return Response({"label_stats": results})
 
 
+class DocRelationshipNameViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = DocRelationshipName.objects.all()
+    serializer_class = NameSerializer
+
+
 class SourceFormatNameViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = SourceFormatName.objects.all()
-    serializer_class = SourceFormatNameSerializer
+    serializer_class = NameSerializer
 
 
 class StdLevelNameViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = StdLevelName.objects.all()
-    serializer_class = StdLevelNameSerializer
+    serializer_class = NameSerializer
 
 
 class StreamNameViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = StreamName.objects.all()
-    serializer_class = StreamNameSerializer
+    serializer_class = NameSerializer
 
 
 class TlpBoilerplateChoiceNameViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = TlpBoilerplateChoiceName.objects.all()
-    serializer_class = TlpBoilerplateChoiceNameSerializer
+    serializer_class = NameSerializer
 
 
 @extend_schema_with_draft_name(actions=["list", "create", "update", "partial_update"])
