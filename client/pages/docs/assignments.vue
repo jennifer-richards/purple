@@ -67,8 +67,8 @@
 </template>
 
 <script setup lang="ts">
-import type { ResolvedDocument, ResolvedPerson } from '~/components/AssignmentsTypes'
-import type { Assignment, RfcToBe, RpcPerson, RpcRole } from '~/purple_client'
+import type { ResolvedQueueItem, ResolvedPerson } from '~/components/AssignmentsTypes'
+import type { Assignment, QueueItem, RpcPerson, RpcRole } from '~/purple_client'
 import { DateTime } from 'luxon'
 
 const csrf = useCookie('csrftoken', { sameSite: 'strict' })
@@ -94,7 +94,7 @@ const documents = computed(
     // Add some fake properties for demonstration purposes
     const assignments = cookedAssignments.value?.filter(a => a.rfcToBe === rtb.id)
     const needsAssignment = rtb.pendingActivities
-    const resolvedDocument: ResolvedDocument = { ...rtb, assignments, needsAssignment }
+    const resolvedDocument: ResolvedQueueItem = { ...rtb, assignments, needsAssignment }
     return resolvedDocument
   })
     .sort(rtb => rtb.externalDeadline ? DateTime.fromJSDate(rtb.externalDeadline).toSeconds() : 0)
@@ -117,14 +117,14 @@ const editors = computed((): ResolvedPerson[] => {
 const currentFilterDesc = computed(() => {
   const currentFilter = roles.value?.find(r => r.slug === state.roleFilter)
   if (currentFilter) {
-    return `Show documents needing ${currentFilter.name}`
+    return `Show documents needing ${ currentFilter.name }`
   }
   return 'Show all documents'
 })
 
 // METHODS
 
-async function saveAssignment (assignment: Pick<Assignment, 'rfcToBe' | 'person'>) {
+async function saveAssignment(assignment: Pick<Assignment, 'rfcToBe' | 'person'>) {
   await $fetch('/api/rpc/assignments/', {
     body: {
       rfc_to_be: assignment.rfcToBe,
@@ -138,7 +138,7 @@ async function saveAssignment (assignment: Pick<Assignment, 'rfcToBe' | 'person'
 }
 
 // Order editors for display
-function compareEditors (a: RpcPerson, b: RpcPerson) {
+function compareEditors(a: RpcPerson, b: RpcPerson) {
   const keys: (keyof RpcPerson)[] = ['completeBy', 'name']
   const comparisons = keys.map(attr => {
     const aval = a[attr]
@@ -151,15 +151,15 @@ function compareEditors (a: RpcPerson, b: RpcPerson) {
   return comparisons.find(c => c !== 0) ?? 0
 }
 
-async function deleteAssignment (assignment: Assignment) {
-  await $fetch(`/api/rpc/assignments/${assignment.id}/`, {
+async function deleteAssignment(assignment: Assignment) {
+  await $fetch(`/api/rpc/assignments/${ assignment.id }/`, {
     method: 'DELETE',
     headers: { 'X-CSRFToken': csrf?.value ?? '' }
   })
   await refresh()
 }
 
-async function refresh () {
+async function refresh() {
   const promises = []
   if (refreshPeople) {
     promises.push(refreshPeople())
@@ -181,9 +181,9 @@ const { data: people, pending: pendingPeople, refresh: refreshPeople } = await u
   { server: false, default: () => ([]) }
 )
 
-const { data: rfcsToBe, pending: pendingDocs, refresh: refreshDocs } = await useAsyncData<RfcToBe[]>(
+const { data: rfcsToBe, pending: pendingDocs, refresh: refreshDocs } = await useAsyncData<QueueItem[]>(
   'rfcsToBe',
-  () => api.documentsInProgressList(),
+  () => api.queueList({ disposition: "in_progress" }),
   { server: false, default: () => ([]) }
 )
 const {
