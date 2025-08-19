@@ -104,7 +104,7 @@ import Badge from '../../components/BaseBadge.vue'
 import { TRISTATE_MIXED } from '~/utilities/tristate'
 import type { TristateValue } from '~/utilities/tristate'
 import type { Column, Row } from '~/components/DocumentTableTypes'
-import type { Assignment, Label, QueueItem, SubmissionListItem } from '~/purple_client'
+import type { ActionHolder, Assignment, Label, QueueItem, SubmissionListItem } from '~/purple_client'
 import type { Tab } from '~/components/TabNavTypes'
 
 // ROUTING
@@ -256,9 +256,9 @@ const columns = computed(() => {
           assignments,
           (assignment) => assignment.person
         )
-        for (const [, assignments] of Object.entries(assignmentsByPerson)) {
+        for (const [personId, assignments] of Object.entries(assignmentsByPerson)) {
           const person = people.value.find(
-            (p) => p.id === assignments[0].person
+            (p) => p.id === parseFloat(personId)
           )
           formattedValue.push(
             h('span', [
@@ -281,8 +281,10 @@ const columns = computed(() => {
           key: 'holder',
           label: 'Action Holder (should allow multiple)',
           field: 'holder',
-          format: (val: any) => val?.name || 'No Action Holders',
-          link: (row: any) => `/team/${row.holder?.id}`
+          format: (val: any) => {
+            const actionHolder = val as ActionHolder | undefined
+            return actionHolder && 'body' in actionHolder ? String(actionHolder.body) : actionHolder?.name ?? 'No name'
+          },
         },
         deadlineCol
       ]
@@ -426,7 +428,7 @@ const filteredDocuments = computed(() => {
           ...d,
           currentState: d.assignmentSet.length > 0 ? `${d.assignmentSet[0].role} (${d.assignmentSet[0].state})` : undefined,
           assignee: d.assignmentSet[0],
-          holder: d.actionholderSet[0]
+          holder: d.actionholderSet
         }))
 
       break
