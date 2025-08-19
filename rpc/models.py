@@ -153,6 +153,20 @@ class RfcToBe(models.Model):
             intervals[-1].end = datetime.datetime.now().astimezone(datetime.UTC)
         return intervals
 
+    def incomplete_activities(self):
+        from .lifecycle import incomplete_activities
+
+        return RpcRole.objects.filter(
+            slug__in=[activity.role_slug for activity in incomplete_activities(self)]
+        )
+
+    def pending_activities(self):
+        from .lifecycle import pending_activities
+
+        return RpcRole.objects.filter(
+            slug__in=[activity.role_slug for activity in pending_activities(self)]
+        )
+
 
 class Name(models.Model):
     slug = models.CharField(max_length=32, primary_key=True)
@@ -282,7 +296,9 @@ class Capability(models.Model):
 class AssignmentQuerySet(models.QuerySet):
     def active(self):
         """QuerySet including only active Assignments"""
-        return super().exclude(state="done")
+        return super().exclude(
+            state__in=[Assignment.State.DONE, Assignment.State.WITHDRAWN]
+        )
 
 
 class Assignment(models.Model):
@@ -306,9 +322,28 @@ class Assignment(models.Model):
     state = models.CharField(max_length=32, choices=State, default=State.ASSIGNED)
     comment = models.TextField(blank=True)
     time_spent = models.DurationField(default=datetime.timedelta(0))  # tbd
+    history = HistoricalRecords()
 
     def __str__(self):
         return f"{self.person} assigned as {self.role} for {self.rfc_to_be}"
+
+    def when_entered_state(self, state: State) -> datetime.datetime | None:
+        last_held = self.history.filter(state=state).last()
+        return None if last_held is None else last_held.history_date
+
+    def when_left_state(self, state: State) -> datetime.datetime | None:
+        last_held = self.history.filter(state=state).last()
+        following_state = None if last_held is None else last_held.next_record
+        return None if following_state is None else following_state.history_date
+
+    def when_assigned(self) -> datetime.datetime | None:
+        return self.when_entered_state(Assignment.State.ASSIGNED)
+
+    def when_started(self) -> datetime.datetime | None:
+        return self.when_entered_state(self.State.IN_PROGRESS)
+
+    def when_completed(self) -> datetime.datetime | None:
+        return self.when_entered_state(self.State.DONE)
 
 
 class RfcAuthor(models.Model):
