@@ -68,6 +68,7 @@ from .serializers import (
     NestedAssignmentSerializer,
     QueueItemSerializer,
     RfcAuthorSerializer,
+    RfcToBeHistorySerializer,
     RfcToBeSerializer,
     RpcPersonSerializer,
     RpcRelatedDocumentSerializer,
@@ -444,6 +445,13 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
     queryset = RfcToBe.objects.all()
     serializer_class = RfcToBeSerializer
     lookup_field = "draft__name"
+
+    @extend_schema(responses=RfcToBeHistorySerializer(many=True))
+    @action(detail=True)
+    def history(self, request, draft__name=None):
+        rfc_to_be = self.get_object()
+        serializer = RfcToBeHistorySerializer(rfc_to_be.history, many=True)
+        return Response(serializer.data)
 
 
 @extend_schema_with_draft_name()

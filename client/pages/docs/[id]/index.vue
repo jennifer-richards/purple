@@ -15,9 +15,9 @@
           <div class="flex items-center gap-x-6 text-gray-900 dark:text-white">
             <Icon name="solar:document-text-line-duotone" class="w-10 h-10"/>
             <h1>
-              <div class="mt-1 text-xl font-semibold leading-6">
-                <span v-if="draft">{{ draft.name }}-{{ draft.rev }}</span>
-              </div>
+              <span class="mt-1 text-xl font-semibold leading-6">
+                <span v-if="rfcToBe">{{ rfcToBe.name }}</span>
+              </span>
             </h1>
           </div>
         </div>
@@ -25,10 +25,11 @@
     </header>
 
     <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div v-if="rawDraftError" class="bg-red-300 px-4 py-2 mb-4">
-        API error while requesting draft: {{ rawDraftError }}
-      </div>
+      <ErrorAlert v-if="rawRfcToBeError" title="API Error">
+        API error while requesting draft: {{ rawRfcToBeError }}
+      </ErrorAlert>
       <div
+        v-else
         class="mx-auto grid max-w-2xl grid-cols-1 grid-rows-1 place-items-stretch gap-x-8 gap-y-8 lg:mx-0 lg:max-w-none lg:grid-cols-3">
 
         <!-- Status summary -->
@@ -37,12 +38,12 @@
           <div class="px-0 pt-6 sm:px-6">
             <h3 class="text-base font-semibold leading-7">Current Assignments</h3>
             <div class="text-sm font-medium">
-              <div v-if="draftAssignments.length === 0">
+              <div v-if="rfcToBeAssignments.length === 0">
                 None
               </div>
               <dl v-else>
                 <div
-                  v-for="assignment of draftAssignments"
+                  v-for="assignment of rfcToBeAssignments"
                   :key="assignment.id"
                   class="py-1 grid grid-cols-2">
                   <dt>{{ people.find(p => p.id === assignment.person)?.name }}</dt>
@@ -66,8 +67,8 @@
                   <!-- Showing externalDeadline here - what about internal_goal? -->
                   <dt>Deadline</dt>
                   <dd>
-                    <time v-if="draft?.externalDeadline" :datetime="draft.externalDeadline.toISODate()?.toString()">
-                      {{ draft.externalDeadline.toLocaleString(DateTime.DATE_MED) }}
+                    <time v-if="rfcToBe?.externalDeadline" :datetime="rfcToBe.externalDeadline.toISODate()?.toString()">
+                      {{ rfcToBe.externalDeadline.toLocaleString(DateTime.DATE_MED) }}
                     </time>
                     <span v-else>-</span>
                   </dd>
@@ -85,9 +86,9 @@
         </BaseCard>
 
         <!-- Document Info -->
-        <DocInfoCard :draft="rawDraft"/>
+        <DocInfoCard :rfc-to-be="rawRfcToBe"/>
 
-        <EditAuthors v-if="draft" :draft-name="draftName" v-model="draft"/>
+        <EditAuthors v-if="rfcToBe" :draft-name="draftName" v-model="rfcToBe"/>
 
         <div class="flex w-full lg:col-span-2 space-x-4">
           <div class="flex flex-col">
@@ -108,8 +109,17 @@
 
         <!-- History -->
         <BaseCard class="lg:col-span-full grid place-items-stretch">
-          <h3 class="text-base font-semibold leading-7">History</h3>
-          <div class="flex">
+          <h3 class="text-base font-semibold leading-7">
+            History
+            <Icon v-show="historyStatus === 'pending'" name="ei:spinner-3" size="1.5em" class="animate-spin" />
+          </h3>
+          <div v-if="historyStatus === 'error'">
+            <ErrorAlert title="Error loading history">
+              <p v-if="historyError">{{ historyError }}</p>
+              <p v-else>Please try reloading and report the error if it persists.</p>
+            </ErrorAlert>
+          </div>
+          <div v-else-if="history && history.length > 0" class="flex">
             <table class="min-w-full divide-y divide-gray-300">
               <thead class="bg-gray-50 dark:bg-neutral-800">
               <tr>
@@ -119,7 +129,7 @@
               </tr>
               </thead>
               <tbody class="divide-y divide-gray-200">
-              <tr v-for="entry of draft?.history ?? []" :key="entry.id">
+              <tr v-for="entry of history ?? []" :key="entry.id">
                 <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium sm:pl-6">
                   <time :datetime="DateTime.fromJSDate(entry.time).toString()">
                     {{ DateTime.fromJSDate(entry.time).toLocaleString(DateTime.DATE_MED) }}
@@ -150,6 +160,7 @@
 <script setup lang="ts">
 
 import { DateTime } from 'luxon'
+import { useAsyncData } from '#app'
 
 const route = useRoute()
 const api = useApi()
@@ -158,23 +169,29 @@ const api = useApi()
 
 const draftName = computed(() => route.params.id.toString())
 
-const { data: rawDraft, error: rawDraftError, pending: draftPending, refresh: draftRefresh } = await useAsyncData(
+const { data: history, error: historyError, status: historyStatus, refresh: historyRefresh } = await useAsyncData(
+  () => `history-${draftName.value}`,
+  () => api.documentsHistoryList({ draftName: draftName.value }),
+  { server: false, lazy: false }
+)
+
+const { data: rawRfcToBe, error: rawRfcToBeError, status: rfcToBeStatus } = await useAsyncData(
   () => `draft-${draftName.value}`,
   () => api.documentsRetrieve({ draftName: draftName.value }),
   { server: false }
 )
 
-const appliedLabels = computed(() => labels.value.filter((lbl) => rawDraft.value?.labels.includes(lbl.id)))
+const appliedLabels = computed(() => labels.value.filter((lbl) => rawRfcToBe.value?.labels.includes(lbl.id)))
 
-const draftAssignments = computed(() => assignments.value.filter((a) => a.rfcToBe === draft.value?.id))
+const rfcToBeAssignments = computed(() => assignments.value.filter((a) => a.rfcToBe === rfcToBe.value?.id))
 
-const draft = computed(() => {
-  if (rawDraft.value) {
+const rfcToBe = computed(() => {
+  if (rawRfcToBe.value) {
     return {
-      ...rawDraft.value,
+      ...rawRfcToBe.value,
       externalDeadline:
-        rawDraft.value.externalDeadline
-          ? DateTime.fromJSDate(rawDraft.value.externalDeadline)
+        rawRfcToBe.value.externalDeadline
+          ? DateTime.fromJSDate(rawRfcToBe.value.externalDeadline)
           : null
     }
   }
@@ -197,16 +214,14 @@ const labels3 = computed(
   () => labels.value.filter((label) => label.used && !label.isComplexity)
 )
 
-const selectedLabelIds = ref(draft.value?.labels ?? [])
+const selectedLabelIds = ref(rfcToBe.value?.labels ?? [])
 
 watch(
   selectedLabelIds,
   async () => api.documentsPartialUpdate({
     draftName: draftName.value,
-    patchedRfcToBe: {
-      labels: selectedLabelIds.value,
-    }
-  }),
+    patchedRfcToBe: { labels: selectedLabelIds.value } }
+  ).finally(historyRefresh),
   { deep: true }
 )
 
@@ -234,14 +249,4 @@ const { data: relatedDocuments } = await useAsyncData(
     server: false,
   }
 )
-
-async function saveLabels (labels: number[]) {
-  if (!draftPending.value) {
-    await api.documentsPartialUpdate({
-      draftName: draft.value?.name ?? '',
-      patchedRfcToBe: { labels }
-    })
-  }
-  draftRefresh()
-}
 </script>
