@@ -58,8 +58,24 @@ admin.site.register(StdLevelName)
 admin.site.register(TlpBoilerplateChoiceName)
 admin.site.register(StreamName)
 admin.site.register(DocRelationshipName)
-admin.site.register(ClusterMember)
-admin.site.register(Cluster)
+
+
+class ClusterMemberInline(admin.TabularInline):
+    model = ClusterMember
+    autocomplete_fields = ["doc"]
+    extra = 0
+
+
+@admin.register(Cluster)
+class ClusterAdmin(admin.ModelAdmin):
+    list_display = ["__str__", "members"]
+    search_fields = ["number", "clustermember__doc__name"]
+    inlines = [ClusterMemberInline]
+
+    def members(self, cluster: Cluster) -> str:
+        return ", ".join(member.doc.name for member in cluster.clustermember_set.all())
+
+
 admin.site.register(UnusableRfcNumber)
 
 
