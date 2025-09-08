@@ -12,9 +12,9 @@
         <span class="font-medium">Cluster: </span>
         <span class="mr-2">
           <span v-if="props.clusterNumber">
-            <Anchor :href="`/clusters/${props.clusterNumber}`" class="inline-flex items-center gap-1 text-blue-600">
+            <NuxtLink :to="`/clusters/${props.clusterNumber}`" class="inline-flex items-center gap-1 text-blue-600">
               <Icon name="pajamas:group" class="h-5 w-5" />{{ props.clusterNumber }}
-            </Anchor>
+            </NuxtLink>
           </span>
         <span v-else>-</span>
         </span>
@@ -34,7 +34,7 @@
 import type { RpcRelatedDocument, RpcPerson } from '~/purple_client';
 import type { Column } from './DocumentTableTypes';
 import { h } from 'vue'
-import { Anchor } from '#components'
+import { NuxtLink } from '#components'
 import BaseBadge from './BaseBadge.vue'
 
 const relatedDocuments = defineModel<RpcRelatedDocument[]>({ default: [] })
@@ -52,8 +52,8 @@ const columns: Column[] = [
     field: 'targetDraftName' satisfies keyof RpcRelatedDocument,
     classes: 'text-sm font-medium',
     format: (row: any) => {
-      return h(Anchor, {
-        href: `/docs/${row}`,
+      return h(NuxtLink, {
+        to: `/docs/${row}`,
         class: 'inline-flex items-center gap-1 text-blue-600'
       }, row)
     }
