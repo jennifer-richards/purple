@@ -227,9 +227,9 @@ const columns = computed(() => {
   }
   if (currentTab.value === 'published') {
     cols.unshift({
-      key: 'rfc',
+      key: 'rfcNumber',
       label: 'RFC',
-      field: 'rfc',
+      field: 'rfcNumber',
       format: (val: any) => `RFC ${val}`
     })
   }
@@ -335,15 +335,17 @@ const columns = computed(() => {
           link: (row: any) => `/team/${row.holder?.id}`
         },
         {
-          key: 'published',
+          key: 'publishedAt',
           label: 'Published',
-          field: 'published',
+          field: 'publishedAt',
           format: (val: any) =>
-            DateTime.fromISO(val).toLocaleString(
-              DateTime.DATE_MED_WITH_WEEKDAY
-            ),
-          classes: 'text-xs'
-        }
+            val
+              ? DateTime.fromJSDate(val as Date).toLocaleString(
+                  DateTime.DATE_MED_WITH_WEEKDAY
+                )
+              : '',
+              classes: 'text-xs'
+            }
       ]
     )
   }
@@ -423,7 +425,9 @@ const filteredDocuments = computed(() => {
           assignee: d.assignmentSet[0],
           holder: d.actionholderSet
         }))
-
+      break
+    case 'published':
+      docs = documents.value
       break
     default:
       docs = []
@@ -454,6 +458,13 @@ const {
     try {
       if (currentTab.value === 'submissions') {
         return await api.submissionsList()
+      } else if (currentTab.value === 'published') {
+        const docs = await api.documentsList({
+          disposition: 'published',
+          ordering: '-published_at',
+          publishedWithinDays: 30,
+        })
+        return docs.results
       } else {
         return await api.queueList()
       }

@@ -101,6 +101,7 @@ class RfcToBe(models.Model):
 
     external_deadline = models.DateTimeField(null=True, blank=True)
     internal_goal = models.DateTimeField(null=True, blank=True)
+    published_at = models.DateTimeField(null=True, blank=True)
 
     # Labels applied to this instance. To track history, see
     # https://django-simple-history.readthedocs.io/en/latest/historical_model.html#tracking-many-to-many-relationships

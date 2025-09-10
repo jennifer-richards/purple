@@ -4,6 +4,7 @@ import datetime
 from dataclasses import dataclass
 
 import rpcapi_client
+from django import forms
 from django.db import transaction
 from django.db.models import Max, Q
 from django.http import JsonResponse
@@ -17,6 +18,7 @@ from drf_spectacular.utils import (
     extend_schema_view,
     inline_serializer,
 )
+from rest_framework import filters as drf_filters
 from rest_framework import mixins, serializers, status, views, viewsets
 from rest_framework.decorators import (
     action,
@@ -465,10 +467,47 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         return base_queryset.filter(person=dt_person.rpcperson)
 
 
+class RfcToBeQueryParamsForm(forms.Form):
+    published_within_days = forms.IntegerField(required=False, min_value=0)
+
+
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            name="published_within_days",
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            required=False,
+            description="Show only RFCs published within the last N days.",
+        ),
+    ]
+)
 class RfcToBeViewSet(viewsets.ModelViewSet):
     queryset = RfcToBe.objects.all()
     serializer_class = RfcToBeSerializer
     lookup_field = "draft__name"
+    filter_backends = (
+        filters.DjangoFilterBackend,
+        drf_filters.OrderingFilter,
+    )
+    filterset_fields = ["disposition"]
+    ordering_fields = ["id", "published_at", "draft__name"]
+    ordering = ["-id"]
+    pagination_class = DefaultLimitOffsetPagination
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        form = RfcToBeQueryParamsForm(self.request.query_params)
+        if form.is_valid():
+            days = form.cleaned_data.get("published_within_days")
+            if days is not None:
+                days_ago_limit = datetime.datetime.now() - datetime.timedelta(
+                    days=int(days)
+                )
+                queryset = queryset.filter(published_at__gte=days_ago_limit)
+        else:
+            raise serializers.ValidationError(form.errors)
+        return queryset
 
     @extend_schema(responses=RfcToBeHistorySerializer(many=True))
     @action(detail=True)

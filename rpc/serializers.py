@@ -364,8 +364,10 @@ class RfcToBeSerializer(serializers.ModelSerializer):
             "assignment_set",
             "actionholder_set",
             "pending_activities",
+            "rfc_number",
+            "published_at",
         ]
-        read_only_fields = ["id", "draft"]
+        read_only_fields = ["id", "draft", "published_at"]
 
 
 class RfcToBeHistorySerializer(HistorySerializer):
