@@ -157,6 +157,19 @@
             </table>
           </div>
         </BaseCard>
+
+        <!-- Comments -->
+        <BaseCard class="lg:col-span-full grid place-items-stretch">
+          <template #header>
+            <CardHeader title="Comments" />
+          </template>
+          <div v-if="rfcToBe && rfcToBe.id" class="flex flex-col items-center space-y-4">
+            <RpcTextarea v-if="rfcToBe" :draft-name="draftName" :reload-comments="commentsReload" class="w-4/5 min-w-100" />
+            <DocumentComments :draft-name="draftName" :rfc-to-be-id="rfcToBe.id" :is-loading="commentsPending"
+              :error="commentsError" :comment-list="commentList" :reload-comments="commentsReload"
+              class="w-3/5 min-w-100" />
+          </div>
+        </BaseCard>
       </div>
     </div>
   </div>
@@ -173,6 +186,13 @@ const api = useApi()
 // COMPUTED
 
 const draftName = computed(() => route.params.id.toString())
+
+const {
+  data: commentList,
+  pending: commentsPending,
+  error: commentsError,
+  refresh: commentsReload
+} = await useCommentsForDraft(draftName.value)
 
 const {
   data: history,
@@ -209,7 +229,7 @@ const rfcToBe = computed(() => {
 
 // DATA
 
-const { data: labels } = await useAsyncData(() => api.labelsList(), { server: false, default: () => [] })
+const { data: labels } = await useLabels()
 
 const labels1 = computed(() =>
   labels.value.filter((label) => label.used && label.isComplexity && !label.isException)
@@ -246,16 +266,5 @@ const { data: people } = await useAsyncData(
   { server: false, default: () => [] }
 )
 
-const relatedDocumentsKey = computed(() => `references-${draftName.value}`)
-
-const { data: relatedDocuments } = await useAsyncData(
-  relatedDocumentsKey,
-  () => api.documentsReferencesList({
-    draftName: draftName.value
-  }),
-  {
-    default: () => [],
-    server: false,
-  }
-)
+const { data: relatedDocuments } = await useReferencesForDraft(draftName.value)
 </script>
