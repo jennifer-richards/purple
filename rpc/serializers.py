@@ -340,6 +340,7 @@ class RfcToBeSerializer(serializers.ModelSerializer):
         source="actionholder_set.active", many=True, read_only=True
     )
     pending_activities = RpcRoleSerializer(many=True, read_only=True)
+    consensus = serializers.SerializerMethodField()
 
     class Meta:
         model = RfcToBe
@@ -366,8 +367,12 @@ class RfcToBeSerializer(serializers.ModelSerializer):
             "pending_activities",
             "rfc_number",
             "published_at",
+            "consensus",
         ]
         read_only_fields = ["id", "draft", "published_at"]
+
+    def get_consensus(self, obj) -> bool:
+        return obj.draft.consensus
 
 
 class RfcToBeHistorySerializer(HistorySerializer):
@@ -675,6 +680,7 @@ class Submission:
     shepherd: str
     std_level: StdLevelName | None
     datatracker_url: str
+    consensus: bool
 
     @classmethod
     def from_rpcapi_draft(cls, draft):
@@ -696,6 +702,7 @@ class Submission:
                 else None
             ),
             datatracker_url=build_datatracker_url(f"/doc/{draft.name}-{draft.rev}"),
+            consensus=draft.consensus,
         )
 
 
@@ -718,6 +725,7 @@ class SubmissionSerializer(serializers.Serializer):
     shepherd = serializers.EmailField()
     std_level = NameSerializer(required=False)
     datatracker_url = serializers.URLField()
+    consensus = serializers.BooleanField()
 
 
 class SubmissionListItemSerializer(serializers.Serializer):
