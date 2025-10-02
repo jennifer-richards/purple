@@ -45,21 +45,17 @@
       <RpcTable>
         <RpcThead>
           <tr v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">
-            <RpcTh
-              v-for="header in headerGroup.headers"
-              :key="header.id"
-              :colSpan="header.colSpan"
-              :is-sortable="header.column.getCanSort()"
-              :sort-direction="header.column.getIsSorted()"
-              @click="header.column.getToggleSortingHandler()?.($event)"
-            >
+            <RpcTh v-for="header in headerGroup.headers" :key="header.id" :colSpan="header.colSpan"
+              :is-sortable="header.column.getCanSort()" :sort-direction="header.column.getIsSorted()"
+              @click="header.column.getToggleSortingHandler()?.($event)">
               <FlexRender v-if="!header.isPlaceholder" :render="header.column.columnDef.header"
                 :props="header.getContext()" />
             </RpcTh>
           </tr>
         </RpcThead>
         <RpcTbody>
-          <RpcRowMessage :status="[status, peopleStatus]" :column-count="table.getAllColumns().length" :row-count="table.getRowModel().rows.length" />
+          <RpcRowMessage :status="[status, peopleStatus]" :column-count="table.getAllColumns().length"
+            :row-count="table.getRowModel().rows.length" />
           <tr v-for="row in table.getRowModel().rows" :key="row.id">
             <RpcTd v-for="cell in row.getVisibleCells()" :key="cell.id">
               <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
@@ -81,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { Anchor, Icon, BaseBadge, RpcLabel } from '#components'
+import { Anchor, Icon, BaseBadge, BaseButton, RpcLabel, AssignmentModal } from '#components'
 import { DateTime } from 'luxon'
 import {
   FlexRender,
@@ -93,16 +89,15 @@ import {
 } from '@tanstack/vue-table'
 import type { SortingState } from '@tanstack/vue-table'
 import { groupBy, uniqBy } from 'lodash-es'
-import type { Label, QueueItem, RpcPerson } from '~/purple_client'
-import { sortDate, type TabId } from '~/utils/queue'
+import type { Assignment, Cluster, Label, QueueItem, RpcPerson, RpcRole } from '~/purple_client'
+import { sortDate, sortLabels } from '~/utils/queue'
+import type { TabId, AssignmentMessageProps } from '~/utils/queue'
 import { ANCHOR_STYLE } from '~/utils/html'
-import { useSiteStore } from '@/stores/site'
+import { overlayModalKey } from '~/providers/providerKeys'
 
 const api = useApi()
-const route = useRoute()
-const router = useRouter()
+
 const currentTab: TabId = 'queue'
-const siteStore = useSiteStore()
 
 const {
   data,
@@ -122,7 +117,7 @@ const {
 
 const { data: people, status: peopleStatus, error: peopleError } = await useAsyncData(() => api.rpcPersonList(), {
   server: false,
-  lazy: false,
+  lazy: true,
   default: () => [] as RpcPerson[]
 })
 
@@ -163,16 +158,12 @@ const columns = [
       if (!labels) return undefined
       return h('span', labels.map(label => h(RpcLabel, { label, class: 'ml-2' })))
     },
-    sortingFn: (rowA, rowB) => {
-      const serializeRow = (row: typeof rowA) => row.original.labels?.map(label => label.slug).join('') ?? ''
-      return serializeRow(rowA).localeCompare(serializeRow(rowB))
-    },
+    sortingFn: (rowA, rowB) => sortLabels(rowA.original.labels, rowB.original.labels),
   }),
   columnHelper.display({
-      id: 'submitted',
-      header: 'Submitted',
-      cell: _data => '',
-      sortingFn: 'alphanumeric',
+    id: 'submitted',
+    header: 'Submitted',
+    cell: _data => '',
   }),
   columnHelper.accessor(
     'externalDeadline',
@@ -197,45 +188,62 @@ const columns = [
           return 'No assignments'
         }
 
-        const formattedValue: VNode[] = []
-        const assignmentsByPerson = groupBy(
-          assignments,
-          (assignment) => assignment.person
-        )
-
-        const firstAssignment = assignments[0]
-        for (const [personId, assignments] of Object.entries(assignmentsByPerson)) {
-          const person = people.value.find(
-            (p) => p.id === parseFloat(personId)
-          )
-          formattedValue.push(
-            h(Anchor, {
-              href: firstAssignment ? `/team/${firstAssignment.id}` : undefined
-            }, () => [
-              person ? person.name : pending ? `...` : '(unknown person)',
-              ' ',
-              ...assignments
-                .sort((a, b) => a.role.localeCompare(b.role, 'en'))
-                .map((assignment) => h(BaseBadge, { label: assignment.role }))
-            ])
-          )
+        const rfcToBeId = data.row.original.id
+        if (rfcToBeId === undefined) {
+          throw Error(`Internal error: expected queueItem to have id but was ${JSON.stringify(data.row.original)}`)
         }
 
-        return h('div', formattedValue)
+        const listItems: VNode[] = []
+
+        const assignmentsByRole = groupBy(
+          assignments,
+          (assignment) => assignment.role
+        )
+
+        const orderedRole = Object.keys(assignmentsByRole)
+          .sort((a, b) => a.localeCompare(b, 'en'))
+
+        for (const role of orderedRole) {
+          const assignments = assignmentsByRole[role] ?? []
+
+          listItems.push(h('li', {}, [
+            h(BaseBadge, { label: role, class: 'mr-1' }),
+            ...assignments.map(assignment => {
+              const rpcPerson = people.value.find((p) => p.id === assignment.person)
+              return h(Anchor, {
+                href: rpcPerson ? `/team/${rpcPerson.id}` : undefined,
+                class: [ANCHOR_STYLE, 'text-sm nowrap']
+              }, () => [
+                rpcPerson ? rpcPerson.name : pending ? `...` : '(unknown person)',
+              ])
+            }).reduce((acc, item, index, arr) => {
+              acc.push(item)
+              if (index < arr.length - 1) {
+                acc.push(', ')
+              } else {
+                acc.push(' ')
+              }
+              return acc
+            }, [] as (VNode | string)[]),
+            h(BaseButton, { btnType: 'outline', size: 'xs', 'onClick': () => openAssignmentModal({ type: 'change', assignments, role, rfcToBeId }) }, () => 'Change'),
+          ]))
+        }
+
+        return h('ul', {}, listItems)
       },
+      sortingFn: 'alphanumeric',
     }
   ),
   columnHelper.accessor(
     'actionholderSet',
     {
-      header: 'Action Holders', cell: data => {
+      header: 'Action Holders',
+      cell: data => {
         const value = data.getValue()
         if (!value) {
           return undefined
         }
-        return h('span', {}, value ?
-          value.map(actionHolder => actionHolder.body ?? actionHolder.name ?? 'No name')
-          : undefined)
+        return h('span', {}, value.map(actionHolder => actionHolder.body ?? actionHolder.name ?? 'No name'))
       },
       sortingFn: 'alphanumeric',
     }
@@ -243,50 +251,59 @@ const columns = [
   columnHelper.accessor(
     'pendingActivities',
     {
-      header: 'Pending Activities', cell: data => {
+      header: 'Pending Activities',
+      cell: data => {
         const value = data.getValue()
         if (!value) {
           return undefined
         }
-        return h('div', value.map(rpcRole => h(BaseBadge, { label: rpcRole.name })))
+
+        const rfcToBeId = data.row.original.id
+        if (rfcToBeId === undefined) {
+          throw Error(`Internal error: expected queueItem to have id but was ${JSON.stringify(data.row.original)}`)
+        }
+
+        return h('ul', {}, value.map(rpcRole =>
+          h('li', {}, [
+            h(BaseBadge, { label: rpcRole.name }),
+            h(BaseButton, { btnType: 'outline', size: 'xs', 'onClick': () => openAssignmentModal({ type: "assign", role: rpcRole.slug, rfcToBeId }) }, () => 'Assign'),
+          ])
+        ))
       },
+      sortingFn: 'alphanumeric',
     }
   ),
   columnHelper.accessor(
     'id',
     {
-      header: 'Estimated Completion', cell: _data => '---',
+      header: 'Estimated Completion',
+      cell: _data => '---',
       sortingFn: 'alphanumeric',
     }
   ),
   columnHelper.accessor(
     'pages',
     {
-      header: 'Pages',
-      cell: data => data.getValue(),
+      header: 'Status',
+      cell: _data => '',
       sortingFn: 'alphanumeric',
-      sortUndefined: 'last',
     }
   ),
   columnHelper.accessor(
     'cluster',
     {
-      header: 'Cluster', cell: data => {
+      header: 'Cluster',
+      cell: data => {
         const value = data.getValue()
         if (!value) {
           return undefined
         }
         return h(Anchor, { href: `/clusters/${value.number}` }, () => [
           h(Icon, { name: 'pajamas:group', class: 'h-5 w-5 inline-block mr-1' }),
-          value.number
+          String(value.number)
         ])
       },
-      sortingFn: (rowA, rowB, columnId) => {
-        const a = rowA.getValue(columnId)?.number
-        const b = rowB.getValue(columnId)?.number
-        return (a > b) ? 1 : (a < b) ? -1 : 0
-      },
-      sortUndefined: 'last',
+      sortingFn: (rowA, rowB) => sortCluster(rowA.original.cluster, rowB.original.cluster),
     }
   ),
 ]
@@ -305,7 +322,6 @@ const allLabelFilters = computed(() => {
   return usedUniqueLabels
 })
 
-
 const table = useVueTable({
   get data() {
     return data.value
@@ -313,12 +329,7 @@ const table = useVueTable({
   columns,
   state: {
     get globalFilter() {
-      return JSON.stringify([
-        needsAssignmentTristate.value,
-        hasExceptionTristate.value,
-        selectedLabelFilters.value,
-        searchQuery.value
-      ])
+      return JSON.stringify([needsAssignmentTristate.value, hasExceptionTristate.value, selectedLabelFilters.value])
     },
     get sorting() {
       return sorting.value
@@ -329,16 +340,6 @@ const table = useVueTable({
     if (d.disposition !== 'in_progress') {
       return false
     }
-
-   // Search filter
-   if (searchQuery.value && searchQuery.value.trim()) {
-     const searchTerm = searchQuery.value.trim().toLowerCase()
-     const nameMatch = d.name?.toLowerCase().includes(searchTerm)
-     const rfcMatch = d.rfcNumber?.toString().toLowerCase().includes(searchTerm)
-     if (!nameMatch && !rfcMatch) {
-       return false
-     }
-   }
 
     const needsAssignmentFilterFn = () => {
       if (needsAssignmentTristate.value === true) {
@@ -394,29 +395,99 @@ const table = useVueTable({
   },
 })
 
-const searchQuery = computed({
-  get: () => siteStore.search,
-  set: (value: string) => { siteStore.search = value }
+const { data: clusters, refresh: refreshClusters, status: clustersStatus, error: clustersError } = await useAsyncData(() => api.clustersList(), {
+  server: false,
+  lazy: false,
+  default: () => [] as Cluster[]
 })
 
-onMounted(() => {
-  if (route.query.search && route.query.search !== siteStore.search) {
-    siteStore.search = route.query.search as string
+const snackbar = useSnackbar()
+const overlayModal = inject(overlayModalKey)
+
+const openAssignmentModal = (assignmentMessage: AssignmentMessageProps) => {
+  if (!overlayModal) {
+    throw Error(`Expected modal provider ${JSON.stringify({ overlayModalKey })}`)
   }
-})
+  const { openOverlayModal, closeOverlayModal } = overlayModal
 
-watch(() => route.query.search, (newSearch) => {
-  siteStore.search = newSearch as string || ''
-})
-
-watch(() => siteStore.search, (newSearch) => {
-  const query = { ...route.query }
-  if (newSearch) {
-    query.search = newSearch
-  } else {
-    delete query.search
+  if (peopleStatus.value === 'error') {
+    snackbar.add({
+      type: 'error',
+      title: 'Error loading people. Reload page.',
+      text: `Error: ${peopleError}`
+    })
+    return
   }
-  router.replace({ query })
-})
+
+  if (clustersStatus.value === 'error') {
+    snackbar.add({
+      type: 'error',
+      title: 'Error loading clusters. Reload page.',
+      text: `Error: ${clustersError}`
+    })
+    return
+  }
+
+  if (clustersStatus.value !== 'success') {
+    snackbar.add({
+      type: 'warning',
+      title: 'Loading clusters',
+      text: 'Please wait...'
+    })
+    return
+  }
+
+  if (peopleStatus.value !== 'success') {
+    snackbar.add({
+      type: 'warning',
+      title: 'Loading people',
+      text: 'Please wait...'
+    })
+    return
+  }
+
+  // Calculate the workload of an editor
+  const peopleWorkload: Record<number, RpcPersonWorkload> = {}
+  const addToPersonWorkload = (personId: number | null | undefined, clusterIds: number[], role: Assignment['role'], pageCount: number | undefined): void => {
+    assertIsNumber(personId)
+    assert(role.length !== 0)
+    assert(typeof pageCount === 'number')
+
+    const editorWorkload: RpcPersonWorkload = peopleWorkload[personId] ?? { personId, clusterIds: [], pageCountByRole: {} }
+    if (clusterIds !== undefined) {
+      clusterIds.forEach(clusterId => {
+        if (!editorWorkload.clusterIds.includes(clusterId)) {
+          editorWorkload.clusterIds.push(clusterId)
+        }
+      })
+    }
+    editorWorkload.pageCountByRole[role] = (editorWorkload.pageCountByRole[role] ?? 0) + pageCount
+
+    peopleWorkload[personId] = editorWorkload
+  }
+  data.value.forEach(doc => {
+    const clustersWithDocument = clusters.value.filter(cluster => cluster.documents.some(clusterDocument =>
+      clusterDocument.name === doc.name
+    ))
+    const clusterIds = clustersWithDocument.map(cluster => cluster.number)
+    doc.assignmentSet?.forEach(assignment => {
+      addToPersonWorkload(assignment.person, clusterIds, assignment.role, doc.pages)
+    })
+  })
+
+  openOverlayModal({
+    component: AssignmentModal,
+    componentProps: {
+      message: assignmentMessage,
+      people: people.value,
+      clusters: clusters.value,
+      peopleWorkload,
+      onSuccess: () => {
+        refresh()
+        refreshClusters()
+      }
+    },
+  })
+}
 
 </script>
