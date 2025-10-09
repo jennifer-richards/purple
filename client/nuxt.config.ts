@@ -73,20 +73,13 @@ export default defineNuxtConfig({
     typeCheck: false
   },
   vite: {
-    css: {
-      preprocessorOptions: {
-        scss: {
-          api: 'modern-compiler'
-        }
-      }
-    },
     optimizeDeps: {
       // Deps that vite does not detect statically
       include: [
         'lodash-es',
         'luxon',
         'humanize-duration',
-        'vue3-snackbar'
+        // 'vue3-snackbar'
       ]
     },
     plugins: [

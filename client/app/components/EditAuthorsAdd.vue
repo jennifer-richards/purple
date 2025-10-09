@@ -48,7 +48,7 @@ import {
 import type { RfcToBe, BaseDatatrackerPerson } from "~/purple_client"
 import { snackbarForErrors } from "~/utils/snackbar"
 
-const draft = defineModel<RfcToBe>({ required: true })
+const draft = defineModel<CookedDraft | RfcToBe>({ required: true })
 
 const selectedAuthor = ref<BaseDatatrackerPerson | undefined>()
 
