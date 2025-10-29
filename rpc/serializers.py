@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from itertools import pairwise
 
 from django.db import IntegrityError
+from django.db.models import QuerySet
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework.fields import empty
@@ -32,6 +33,7 @@ from .models import (
     SourceFormatName,
     StdLevelName,
     StreamName,
+    SubseriesMember,
     UnusableRfcNumber,
 )
 
@@ -354,6 +356,70 @@ class QueueItemSerializer(serializers.ModelSerializer):
             return None
 
 
+class SubseriesMemberSerializer(serializers.ModelSerializer):
+    """Serialize a SubseriesMember"""
+
+    display_name = serializers.SerializerMethodField()
+    slug = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SubseriesMember
+        fields = ["id", "rfc_to_be", "type", "number", "display_name", "slug"]
+
+    def get_display_name(self, obj) -> str:
+        if not obj:
+            return None
+        return f"{obj.type.slug.upper()} {obj.number}"
+
+    def get_slug(self, obj) -> str:
+        if not obj:
+            return None
+        return f"{obj.type.slug.lower()}{obj.number}"
+
+
+class MinimalRfcToBeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RfcToBe
+        fields = ["name", "rfc_number"]
+
+
+@dataclass
+class SubseriesDoc:
+    """Representation of a single Subseries Doc (e.g. BCP 123) and its containing
+    RFCs"""
+
+    type: str
+    number: int
+
+    @property
+    def documents(self) -> QuerySet[RfcToBe]:
+        return RfcToBe.objects.filter(
+            subseriesmember__type__slug=self.type,
+            subseriesmember__number=self.number,
+        ).prefetch_related("subseriesmember_set")
+
+    @property
+    def rfc_count(self) -> int:
+        return len(self.documents)
+
+    @property
+    def slug(self) -> str:
+        return f"{self.type.lower()}{self.number}"
+
+    @property
+    def display_name(self) -> str:
+        return f"{self.type.upper()} {self.number}"
+
+
+class SubseriesDocSerializer(serializers.Serializer):
+    type = serializers.CharField()
+    number = serializers.IntegerField()
+    documents = MinimalRfcToBeSerializer(many=True)
+    rfc_count = serializers.IntegerField(read_only=True)
+    slug = serializers.CharField(read_only=True)
+    display_name = serializers.CharField(read_only=True)
+
+
 class RfcToBeSerializer(serializers.ModelSerializer):
     """RfcToBeSerializer suitable for displaying full details of a single instance"""
 
@@ -370,6 +436,10 @@ class RfcToBeSerializer(serializers.ModelSerializer):
     )
     pending_activities = RpcRoleSerializer(many=True, read_only=True)
     consensus = serializers.SerializerMethodField()
+
+    subseries = SubseriesMemberSerializer(
+        source="subseriesmember_set", many=True, read_only=True
+    )
 
     class Meta:
         model = RfcToBe
@@ -397,6 +467,7 @@ class RfcToBeSerializer(serializers.ModelSerializer):
             "rfc_number",
             "published_at",
             "consensus",
+            "subseries",
         ]
         read_only_fields = ["id", "draft", "published_at"]
 
