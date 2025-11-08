@@ -879,3 +879,9 @@ class UnusableRfcNumberSerializer(serializers.ModelSerializer):
     class Meta:
         model = UnusableRfcNumber
         fields = ["number", "comment"]
+
+
+class PublishResponseSerializer(serializers.Serializer):
+    """Serialize the response to a publication request"""
+    type = serializers.ChoiceField(choices=["success", "error"])
+    message = serializers.CharField()

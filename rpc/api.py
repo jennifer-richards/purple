@@ -91,6 +91,7 @@ from .serializers import (
     UnusableRfcNumberSerializer,
     VersionInfoSerializer,
     check_user_has_role,
+    PublishResponseSerializer,
 )
 from .utils import VersionInfo, create_rpc_related_document, get_or_create_draft_by_name
 
@@ -561,6 +562,26 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
         rfc_to_be = self.get_object()
         serializer = RfcToBeHistorySerializer(rfc_to_be.history, many=True)
         return Response(serializer.data)
+
+    @extend_schema(responses=PublishResponseSerializer)
+    @action(detail=True, methods=["post"], url_path="publish")
+    def publish(self, request, draft__name=None):
+        """Publish an RFC-to-be as an RFC"""
+        # todo permissions
+        rfc_to_be = self.get_object()
+        # todo fetch files
+        # todo extract metadata
+        metadata_mismatch = False  # todo compare metadata with rfc_to_be fields
+        if metadata_mismatch:
+            return Response(PublishResponseSerializer({
+                "type": "error",
+                "message": "metadata mismatch",  # todo more useful error please
+            }))
+        # todo publication steps
+        return Response(PublishResponseSerializer({
+            "type": "success",
+            "message": "published",
+        }))
 
 
 @extend_schema_with_draft_name()
