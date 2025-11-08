@@ -11,6 +11,7 @@ from django.db import transaction
 from django.db.models import Max, OuterRef, Prefetch, Q, Subquery
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django_filters import rest_framework as filters
 from drf_spectacular.types import OpenApiTypes
@@ -34,6 +35,8 @@ from rest_framework.exceptions import (
 )
 from rest_framework.generics import ListAPIView
 from rest_framework.pagination import LimitOffsetPagination
+from rest_framework.parsers import MultiPartParser
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rules.contrib.rest_framework import AutoPermissionViewSetMixin
 
@@ -76,6 +79,9 @@ from .serializers import (
     DocumentCommentSerializer,
     FinalApprovalSerializer,
     LabelSerializer,
+    MailMessageSerializer,
+    MailResponseSerializer,
+    MailTemplateSerializer,
     NameSerializer,
     NestedAssignmentSerializer,
     QueueItemSerializer,
@@ -1124,3 +1130,83 @@ class FinalApprovalViewSet(viewsets.ModelViewSet):
         if self.action == "create":
             return CreateFinalApprovalSerializer
         return FinalApprovalSerializer
+
+
+class Mail(views.APIView):
+    parser_classes = [MultiPartParser]  # needed for FileField
+    permission_classes = [AllowAny]  # todo not this
+
+    @extend_schema(
+        operation_id="mail_send",
+        request=MailMessageSerializer,
+        responses=MailResponseSerializer,
+    )
+    def post(self, request, format=None):
+        # todo actually send mail
+        # todo debug whether attachments work as intended
+        serializer = MailMessageSerializer(data=request.data)
+        if serializer.is_valid():
+            print(f"to: {serializer.validated_data['to']}")
+            print(f"cc: {serializer.validated_data['cc']}")
+            print(f"subject: {serializer.validated_data['subject']}")
+            for attachment in serializer.validated_data["attachments"]:
+                print(f"attachment: {attachment['name']}")
+        else:
+            print(serializer.errors)
+        return Response(
+            MailResponseSerializer(
+                {
+                    "type": "success",
+                    "message": "Message accepted",
+                }
+            ).data
+        )
+
+
+class RfcMailTemplatesList(views.APIView):
+    permission_classes = [AllowAny]  # todo not this
+
+    @extend_schema(
+        responses=MailTemplateSerializer(many=True),
+        parameters=[
+            OpenApiParameter(
+                name="rfctobe_id",
+                type=OpenApiTypes.INT,
+                location="path",
+            ),
+        ],
+    )
+    def get(self, request, rfctobe_id, format=None):
+        try:
+            rfc_to_be = RfcToBe.objects.get(pk=rfctobe_id)
+        except RfcToBe.DoesNotExist:
+            raise NotFound("Unknown rfctobe_id") from None
+
+        message_templates = (
+            ("blank", "mail/blank.txt", "Blank Message"),
+            ("finalreview", "mail/finalreview.txt", "Final Review"),
+            ("publication", "mail/publication.txt", "Announce Publication"),
+        )
+
+        serializer = MailTemplateSerializer(
+            [
+                {
+                    "label": label,
+                    "template": {
+                        "msgtype": msgtype,
+                        "to": "someone@example.com",
+                        "cc": "nobody@example.com",
+                        "subject": f"Message that is a {label}",
+                        "body": (
+                            render_to_string(
+                                template_filename,
+                                context={"rfc_to_be": rfc_to_be},
+                            )
+                        ),
+                    },
+                }
+                for msgtype, template_filename, label in message_templates
+            ],
+            many=True,
+        )
+        return Response(serializer.data)

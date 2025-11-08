@@ -950,3 +950,35 @@ class CreateFinalApprovalSerializer(FinalApprovalSerializer):
             overriding_approver=overriding_approver_dt_person,
             **validated_data,
         )
+
+
+class MailAttachmentSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    content = serializers.FileField(
+        allow_empty_file=False,
+        use_url=False,
+    )
+
+
+class MailMessageSerializer(serializers.Serializer):
+    """Mail message serializer
+
+    Because of the FileField, this cannot be used with a JSONParser.
+    """
+
+    msgtype = serializers.CharField(help_text="slug that identifies message type ")
+    to = serializers.CharField(allow_blank=False)
+    cc = serializers.CharField(default="", allow_blank=True)
+    subject = serializers.CharField(allow_blank=False)
+    body = serializers.CharField(allow_blank=False)
+    attachments = MailAttachmentSerializer(many=True, required=False)
+
+
+class MailTemplateSerializer(serializers.Serializer):
+    label = serializers.CharField(help_text="human readable text for UI")
+    template = MailMessageSerializer()
+
+
+class MailResponseSerializer(serializers.Serializer):
+    type = serializers.ChoiceField(choices=["success", "error"])
+    message = serializers.CharField()
