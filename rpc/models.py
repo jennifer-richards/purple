@@ -319,6 +319,7 @@ class Cluster(models.Model):
 class UnusableRfcNumber(models.Model):
     number = models.PositiveIntegerField(primary_key=True)
     comment = models.TextField(blank=True)
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ["number"]
