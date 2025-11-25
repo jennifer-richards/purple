@@ -28,4 +28,8 @@ app.autodiscover_tasks()
 
 @app.task(bind=True, ignore_result=True)
 def debug_task(self):
-    print(f"Request: {self.request!r}")
+    import datetime
+    print(
+        f"At {datetime.datetime.now(tz=datetime.UTC).isoformat()}, "
+        f"request: {self.request!r}"
+    )
