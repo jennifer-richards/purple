@@ -47,6 +47,15 @@ class VersionInfoSerializer(serializers.Serializer):
     dump_timestamp = serializers.DateTimeField(required=False, read_only=True)
 
 
+class NameSerializer(serializers.Serializer):
+    """Serialize any Name subclass"""
+
+    slug = serializers.CharField(max_length=32)
+    name = serializers.CharField(max_length=255)
+    desc = serializers.CharField(allow_blank=True)
+    used = serializers.BooleanField(default=True)
+
+
 class BaseDatatrackerPersonSerializer(serializers.ModelSerializer):
     """Serialize a minimal DatatrackerPerson
 
@@ -354,6 +363,19 @@ class FinalApprovalSerializer(serializers.Serializer):
         return FinalApproval.objects.get(pk=instance.pk)
 
 
+class IanaStatusSerializer(NameSerializer):
+    """Serialize IANA status with slug and display text"""
+
+    def to_representation(self, instance):
+        """Convert the stored slug value to an object with slug and desc"""
+        choices_dict = dict(RfcToBe._IanaStatus.choices)
+        return {
+            "slug": instance,
+            "name": instance,
+            "desc": choices_dict.get(instance, instance),
+        }
+
+
 class QueueItemSerializer(serializers.ModelSerializer):
     """RfcToBe serializer suitable for displaying a queue of many"""
 
@@ -371,6 +393,7 @@ class QueueItemSerializer(serializers.ModelSerializer):
     final_approval = FinalApprovalSerializer(
         source="finalapproval_set", many=True, read_only=True
     )
+    iana_status = IanaStatusSerializer(read_only=True)
 
     class Meta:
         model = RfcToBe
@@ -390,6 +413,7 @@ class QueueItemSerializer(serializers.ModelSerializer):
             "pages",
             "enqueued_at",
             "final_approval",
+            "iana_status",
         ]
 
     @extend_schema_field(serializers.DateField())
@@ -487,6 +511,15 @@ class RfcToBeSerializer(serializers.ModelSerializer):
     subseries = SubseriesMemberSerializer(
         source="subseriesmember_set", many=True, read_only=True
     )
+    iana_status = IanaStatusSerializer(read_only=True)
+
+    iana_status_slug = serializers.ChoiceField(
+        source="iana_status",
+        choices=RfcToBe._IanaStatus.choices,
+        write_only=True,
+        required=False,
+        help_text=("Set the IANA status by providing the slug identifier."),
+    )
 
     class Meta:
         model = RfcToBe
@@ -515,6 +548,8 @@ class RfcToBeSerializer(serializers.ModelSerializer):
             "published_at",
             "consensus",
             "subseries",
+            "iana_status",
+            "iana_status_slug",
         ]
         read_only_fields = ["id", "draft", "published_at"]
 
@@ -560,6 +595,15 @@ class CreateRfcToBeSerializer(serializers.ModelSerializer):
     # Need to explicitly specify labels as a PK because it uses a through model
     labels = serializers.PrimaryKeyRelatedField(many=True, queryset=Label.objects.all())
 
+    iana_status_slug = serializers.ChoiceField(
+        source="iana_status",
+        choices=RfcToBe._IanaStatus.choices,
+        write_only=True,
+        required=False,
+        help_text="Set the IANA status by providing the slug identifier. "
+        "Defaults to 'not_completed' if not provided.",
+    )
+
     class Meta:
         model = RfcToBe
         fields = [
@@ -570,6 +614,7 @@ class CreateRfcToBeSerializer(serializers.ModelSerializer):
             "external_deadline",
             "labels",
             "draft",
+            "iana_status_slug",
         ]
 
     def create(self, validated_data):
@@ -801,15 +846,6 @@ class ClusterSerializer(serializers.ModelSerializer):
             "number",
             "documents",
         ]
-
-
-class NameSerializer(serializers.Serializer):
-    """Serialize any Name subclass"""
-
-    slug = serializers.CharField(max_length=32)
-    name = serializers.CharField(max_length=255)
-    desc = serializers.CharField(allow_blank=True)
-    used = serializers.BooleanField(default=True)
 
 
 @dataclass
