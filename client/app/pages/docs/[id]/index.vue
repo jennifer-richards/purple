@@ -136,7 +136,7 @@
         </BaseCard>
 
         <div class="lg:col-span-full">
-          <DocumentFinalReviews :heading-level="4" :name="draftName" :on-success="() => commentsReload()" />
+          <DocumentFinalReviews :heading-level="4" :name="draftName" />
         </div>
 
         <!-- History -->
@@ -183,16 +183,28 @@
           </div>
         </BaseCard>
 
-        <!-- Comments -->
         <BaseCard class="lg:col-span-full grid place-items-stretch">
           <template #header>
-            <CardHeader title="Comments" />
+            <CardHeader title="Comments (private)" />
           </template>
           <div v-if="rfcToBe && rfcToBe.id" class="flex flex-col items-center space-y-4">
-            <RpcTextarea v-if="rfcToBe" :draft-name="draftName" :reload-comments="commentsReload"
+            <RpcCommentTextarea v-if="rfcToBe" :draft-name="draftName" :reload-comments="commentsReload"
               class="w-4/5 min-w-100" />
             <DocumentComments :draft-name="draftName" :rfc-to-be-id="rfcToBe.id" :is-loading="commentsPending"
               :error="commentsError" :comment-list="commentList" :reload-comments="commentsReload"
+              class="w-3/5 min-w-100" />
+          </div>
+        </BaseCard>
+
+        <BaseCard class="lg:col-span-full grid place-items-stretch">
+          <template #header>
+            <CardHeader title="Approval Logs (public)" />
+          </template>
+          <div v-if="rfcToBe && rfcToBe.id" class="flex flex-col items-center space-y-4">
+            <RpcApprovalLogTextarea v-if="rfcToBe" :draft-name="draftName" :reload="approvalLogsListReload"
+              class="w-4/5 min-w-100" />
+            <DocumentApprovalLogs :draft-name="draftName" :rfc-to-be-id="rfcToBe.id" :is-loading="approvalLogsListPending"
+              :error="approvalLogsListError" :comment-list="approvalLogsList" :reload="approvalLogsListReload"
               class="w-3/5 min-w-100" />
           </div>
         </BaseCard>
@@ -227,6 +239,17 @@ const {
 } = await useCommentsForDraft(draftName.value)
 
 const {
+  data: approvalLogsList,
+  pending: approvalLogsListPending,
+  error: approvalLogsListError,
+  refresh: approvalLogsListReload
+} = await useAsyncData(
+    `approval-log-${draftName.value}`,
+    () => api.documentsApprovalLogsList({ draftName: draftName.value }),
+    { server: false, lazy: true }
+  )
+
+const {
   data: history,
   error: historyError,
   status: historyStatus,
@@ -251,7 +274,7 @@ const appliedLabels = computed(() => labels.value.filter((lbl) => {
 // todo retrieve assignments for a single draft more efficiently
 const { data: assignments, refresh: refreshAssignments } = await useAsyncData(
   () => api.assignmentsList(),
-  { server: false, default: () => [] as Assignment[] }
+  { server: false, lazy: true, default: () => [] as Assignment[] }
 )
 
 const rfcToBeAssignments = computed(() =>
@@ -331,7 +354,7 @@ watch(
 
 const { data: people } = await useAsyncData(
   () => api.rpcPersonList(),
-  { server: false, default: () => [] }
+  { server: false, lazy: true, default: () => [] }
 )
 
 const { data: relatedDocuments } = await useReferencesForDraft(draftName.value)
@@ -471,7 +494,5 @@ const openEmailModal = async () => {
       throw e
     }
   })
-
 }
-
 </script>
