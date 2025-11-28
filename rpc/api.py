@@ -44,6 +44,11 @@ from rules.contrib.rest_framework import AutoPermissionViewSetMixin
 from datatracker.models import DatatrackerPerson, Document
 from datatracker.rpcapi import with_rpcapi
 
+from .lifecycle.publication import (
+    can_publish,
+    publish_rfctobe,
+    validate_ready_to_publish,
+)
 from .models import (
     ASSIGNMENT_INACTIVE_STATES,
     ActionHolder,
@@ -134,9 +139,7 @@ def profile(request):
     user = request.user
     if not user.is_authenticated:
         return JsonResponse({"authenticated": False})
-    dt_person = user.datatracker_person()
-    # hasattr() test also handles None case
-    rpcperson = dt_person.rpcperson if hasattr(dt_person, "rpcperson") else None
+    rpcperson = user.rpcperson()
     # grant manager permissions to managers and superusers
     if user.is_superuser:
         is_manager = True
@@ -231,8 +234,6 @@ class RpcPersonAssignmentViewSet(mixins.ListModelMixin, viewsets.GenericViewSet)
     """Assignments for a specific RPC Person
 
     URL router must provide the `person_id` kwarg
-
-    TODO: permissions
     """
 
     queryset = Assignment.objects.exclude(state__in=ASSIGNMENT_INACTIVE_STATES)
@@ -254,14 +255,8 @@ class RpcPersonAssignmentViewSet(mixins.ListModelMixin, viewsets.GenericViewSet)
             return queryset
 
         # Non-superusers/managers should only see their own assignments
-        dt_person = (
-            user.datatracker_person() if hasattr(user, "datatracker_person") else None
-        )
-        if (
-            dt_person is None
-            or not hasattr(dt_person, "rpcperson")
-            or dt_person.rpcperson.id != req_person_id
-        ):
+        rpcperson = user.rpcperson() if hasattr(user, "rpcperson") else None
+        if rpcperson is None or rpcperson.id != req_person_id:
             raise PermissionDenied("Unauthorized request")
 
         return queryset
@@ -543,30 +538,30 @@ class AssignmentViewSet(viewsets.ModelViewSet):
 
         # Non-superusers/managers should only see their own assignments
         # more granular permission to be added later
-        dt_person = (
-            user.datatracker_person() if hasattr(user, "datatracker_person") else None
-        )
-        if dt_person is None or not hasattr(dt_person, "rpcperson"):
+        rpcperson = user.rpcperson() if hasattr(user, "rpcperson") else None
+        if rpcperson is None:
             raise PermissionDenied("Unauthorized request")
 
         # Filter assignments for the logged-in RpcPerson
-        return base_queryset.filter(person=dt_person.rpcperson)
+        return base_queryset.filter(person=rpcperson)
 
 
 class RfcToBeQueryParamsForm(forms.Form):
     published_within_days = forms.IntegerField(required=False, min_value=0)
 
 
-@extend_schema(
-    parameters=[
-        OpenApiParameter(
-            name="published_within_days",
-            type=OpenApiTypes.INT,
-            location=OpenApiParameter.QUERY,
-            required=False,
-            description="Show only RFCs published within the last N days.",
-        ),
-    ]
+@extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="published_within_days",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Show only RFCs published within the last N days.",
+            ),
+        ]
+    ),
 )
 class RfcToBeViewSet(viewsets.ModelViewSet):
     queryset = RfcToBe.objects.all()
@@ -594,11 +589,21 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
         return queryset
 
     @extend_schema(responses=RfcToBeHistorySerializer(many=True))
-    @action(detail=True, pagination_class=None)
+    @action(detail=True, pagination_class=None, filter_backends=[])
     def history(self, request, draft__name=None):
         rfc_to_be = self.get_object()
         serializer = RfcToBeHistorySerializer(rfc_to_be.history, many=True)
         return Response(serializer.data)
+
+    @extend_schema(operation_id="documents_publish", request=None, responses=None)
+    @action(detail=True, methods=["post"])
+    def publish(self, request, draft__name=None):
+        rfctobe = self.get_object()
+        if not can_publish(rfctobe, request.user):
+            raise PermissionDenied("User is not permitted to publish this RFC")
+        validate_ready_to_publish(rfctobe)  # raises ValidationError
+        publish_rfctobe(rfctobe)
+        return Response()  # todo return value
 
 
 @extend_schema_with_draft_name()

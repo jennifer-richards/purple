@@ -1,5 +1,12 @@
 # Copyright The IETF Trust 2025, All Rights Reserved
-import datetime
+"""Datatracker RFC publication
+
+This module is for logic involved with notifying datatracker that an RFC has been
+published and uploading the file contents. Note that there is a similarly named module
+in the rpc app (rpc.lifecycle.publication) that contains logic related to the API the
+purple front-end uses to trigger RFC publication.
+"""
+
 import json
 from json import JSONDecodeError
 
@@ -14,6 +21,7 @@ def publish_rfc(rfctobe, *, rpcapi: rpcapi_client.PurpleApi):
     # todo add guards
     #  - missing rfc_number
     #  - state of rfctobe
+    #  - missing published_at
     # todo error handling
     try:
         publish_rfc_metadata(rfctobe, rpcapi=rpcapi)
@@ -34,7 +42,7 @@ def publish_rfc(rfctobe, *, rpcapi: rpcapi_client.PurpleApi):
 @with_rpcapi
 def publish_rfc_metadata(rfctobe, *, rpcapi: rpcapi_client.PurpleApi):
     rfc_pub_req = RfcPubRequest(
-        published=datetime.datetime.now(tz=datetime.UTC),  # todo real pub date
+        published=rfctobe.published_at,
         rfc_number=rfctobe.rfc_number,
         title=rfctobe.title,
         authors=[
