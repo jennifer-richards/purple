@@ -1,5 +1,12 @@
 <template>
-  <div>
+  <div v-if="userStore.authenticated !== true" class="w-[3.5em] mt-2 mx-auto">
+    <Icon
+      name="ei:spinner-3"
+      size="3.5em"
+      class="animate-spin"
+    />
+  </div>
+  <div v-else>
     <SidebarNav />
     <main class="lg:pl-72">
       <HeaderNav />
@@ -18,9 +25,12 @@
 </template>
 
 <script setup lang="ts">
+import { useUserStore } from '@/stores/user'
 import { useDefaultHead } from '~/utils/head'
 import { overlayModalKey } from '../providers/providerKeys'
 import type { OverlayModal } from '../providers/providerKeys'
+
+const userStore = useUserStore()
 
 useDefaultHead()
 
