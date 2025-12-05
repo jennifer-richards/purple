@@ -385,7 +385,7 @@ class IanaStatusSerializer(NameSerializer):
 
     def to_representation(self, instance):
         """Convert the stored slug value to an object with slug and desc"""
-        choices_dict = dict(RfcToBe._IanaStatus.choices)
+        choices_dict = dict(RfcToBe.IanaStatus.choices)
         return {
             "slug": instance,
             "name": instance,
@@ -532,7 +532,7 @@ class RfcToBeSerializer(serializers.ModelSerializer):
 
     iana_status_slug = serializers.ChoiceField(
         source="iana_status",
-        choices=RfcToBe._IanaStatus.choices,
+        choices=RfcToBe.IanaStatus.choices,
         write_only=True,
         required=False,
         help_text=("Set the IANA status by providing the slug identifier."),
@@ -614,7 +614,7 @@ class CreateRfcToBeSerializer(serializers.ModelSerializer):
 
     iana_status_slug = serializers.ChoiceField(
         source="iana_status",
-        choices=RfcToBe._IanaStatus.choices,
+        choices=RfcToBe.IanaStatus.choices,
         write_only=True,
         required=False,
         help_text="Set the IANA status by providing the slug identifier. "
