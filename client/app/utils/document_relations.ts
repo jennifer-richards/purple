@@ -1,30 +1,30 @@
 /**
  * Ported from https://github.com/ietf-tools/datatracker/blob/b3f2756f6b5d6adf853eb7779412950291169c38/ietf/static/js/document_relations.js#L106
  */
-
+import { startCase } from 'lodash-es'
 import * as d3 from "d3"
-import { black, blue, cyan, font, get_ref_type, gray400, green, line_height, orange, red, ref_type, teal, white, yellow, type Data, type DataParam, type Line, type Link, type LinkParam, type Node, type NodeParam, type Rel } from "./document_relations-utils"
+import { black, blue, cyan, font, getHumanReadableRelationshipName, gray800, green, line_height, orange, red, ref_type, teal, white, yellow, type Data, type DataParam, type Line, type Link, type LinkParam, type Node, type NodeParam, type Relationship } from "./document_relations-utils"
 import { getAncestors } from './dom'
 
-const link_color: Record<Rel, string> = {
+const link_color: Record<Relationship, string> = {
   "refqueue": green,
-  "not-received": blue,
+  "not-received": red,
   "withdrawnref": orange,
-  'refnorm':  teal,
+  'refnorm': teal,
   'relinfo': yellow
 } as const
 
-const get_link_color = (rel: Rel) => {
+const getLinkColor = (rel: Relationship) => {
   const customColor: string | undefined = link_color[rel as keyof typeof link_color]
-  if(customColor !== undefined) {
+  if (customColor !== undefined) {
     return customColor
   }
   console.error(`Unable to find rel style ${JSON.stringify(rel)}`)
   return black
 }
 
-const get_name = (sourceOrTarget: Link["source"] | LinkParam["source"]): string => {
-  if(typeof sourceOrTarget === 'string') {
+const getName = (sourceOrTarget: Link["source"] | LinkParam["source"]): string => {
+  if (typeof sourceOrTarget === 'string') {
     return sourceOrTarget
   }
   return sourceOrTarget.id
@@ -32,29 +32,22 @@ const get_name = (sourceOrTarget: Link["source"] | LinkParam["source"]): string 
 
 const DEFAULT_STROKE = 10
 
-function stroke(d: NodeParam) {
-  if (
-    d.level == "Informational" ||
-    d.level == "Experimental" ||
-    d.level == ""
-  ) {
-    return 1
+const strokeWidth = (d: NodeParam): number => {
+  switch (d.disposition) {
+    case 'assigned':
+      return 3
+    case 'done':
+      return 1
+    case 'in_progress':
+      return 6
   }
-  if (d.level == "Proposed Standard") {
-    return 4
-  }
-  if (d.level == "Best Current Practice") {
-    return 8
-  }
-  // all others (draft/full standards)
-  return 10
+  return 0
 }
 
 // code partially adapted from
 // https://observablehq.com/@mbostock/fit-text-to-circle
 
-
-type LinesProps= { id: string, rfcNumber?: number }
+type LinesProps = { id: string, rfcNumber?: number }
 function lines({ id, rfcNumber }: LinesProps): Line[] {
   let line_width_0 = Infinity
   let text = id
@@ -64,7 +57,7 @@ function lines({ id, rfcNumber }: LinesProps): Line[] {
   }
 
   const lines: Line[] = []
-  if(rfcNumber) {
+  if (rfcNumber) {
     const newRfcNumber = `RFC ${rfcNumber}`
     lines.push({
       text: newRfcNumber,
@@ -85,15 +78,15 @@ function lines({ id, rfcNumber }: LinesProps): Line[] {
       .split(/rfc/g)
       .map((x, i, a) => (i < a.length - 1 ? x + "RFC" : x))
   }
-  const target_width = Math.sqrt(measure_width(text.trim()) * line_height)
+  const target_width = Math.sqrt(measureWidth(text.trim()) * line_height)
   for (let i = 0, n = words.length; i < n; ++i) {
     let line_text = (line ? line.text : "") + words[i]
-    let line_width = measure_width(line_text)
+    let line_width = measureWidth(line_text)
     if ((line_width_0 + line_width) / 2 < target_width) {
       line.width = line_width_0 = line_width
       line.text = line_text
     } else {
-      line_width_0 = measure_width(words[i] ?? '')
+      line_width_0 = measureWidth(words[i] ?? '')
       line = { width: line_width_0, text: words[i] ?? '' }
       lines.push(line)
     }
@@ -101,7 +94,7 @@ function lines({ id, rfcNumber }: LinesProps): Line[] {
   return lines
 }
 
-function measure_width(text: string): number {
+function measureWidth(text: string): number {
   const context = document.createElement("canvas").getContext("2d")
 
   if (!context) {
@@ -112,7 +105,7 @@ function measure_width(text: string): number {
   return context.measureText(text).width
 }
 
-function text_radius(lines: Line[]) {
+function textRadius(lines: Line[]) {
   let radius = 0
   for (let i = 0, n = lines.length; i < n; ++i) {
     const line = lines[i]
@@ -123,9 +116,9 @@ function text_radius(lines: Line[]) {
   return radius
 }
 
-export type DrawGraphParameters = Parameters<typeof draw_graph>
+export type DrawGraphParameters = Parameters<typeof drawGraph>
 
-export function draw_graph(data: DataParam, pushRouter: (path: string) => void) {
+export function drawGraph(data: DataParam, pushRouter: (path: string) => void) {
   const zoom = d3
     .zoom<SVGSVGElement, unknown>()
     .scaleExtent([1 / 32, 32])
@@ -160,7 +153,7 @@ export function draw_graph(data: DataParam, pushRouter: (path: string) => void) 
     .attr("stroke-width", 0.2)
     .attr("stroke", black)
     .attr("orient", "auto")
-    .attr("fill", (d) => get_link_color(d))
+    .attr("fill", (d) => getLinkColor(d))
     .append("path")
     .attr("d", "M0,-5L10,0L0,5")
 
@@ -172,10 +165,10 @@ export function draw_graph(data: DataParam, pushRouter: (path: string) => void) 
     .data(data.links)
     .join("path")
     .attr("title", (d) => {
-      return `${get_name(d.source)} ${get_ref_type(d.rel)} ${get_name(d.target)}`
+      return `Relationship: ${getName(d.source)} ${getHumanReadableRelationshipName(d.rel)} ${getName(d.target)}`
     })
     .attr("marker-end", (d) => `url(#marker-${d.rel})`)
-    .attr("stroke", (d) => get_link_color(d.rel))
+    .attr("stroke", (d) => getLinkColor(d.rel))
     .attr("class", (d) => d.rel)
 
   const node = svg.append("g").selectAll("g").data(data.nodes).join("g")
@@ -183,30 +176,12 @@ export function draw_graph(data: DataParam, pushRouter: (path: string) => void) 
   let max_r = 0
   const a = node
     .append("a")
-    .attr("href", (d) => d.url ?? null)
-    .attr("title", (d) => {
-      const nodePropsWeCareAbout: (keyof NodeParam)[] = [
-        "isReplaced",
-        "isDead",
-        "isExpired",
-      ]
-      let type = nodePropsWeCareAbout.filter((x) => d[x]).join(" ")
-      if (type) {
-        type += " "
-      }
-      if (d.level) {
-        type += `${d.level} `
-      }
-      const typeZero = type[0] ?? ''
-      if (d.group != undefined && d.group != "none" && d.group != "") {
-        const word = d.isRfc ? "from" : "in"
-        type += `group document ${word} ${d.group.toUpperCase()}`
-      } else {
-        type += "individual document"
-      }
-      const name = d.isRfc ? [d.rfcNumber, d.id.toUpperCase()].filter(Boolean).join(", ") : d.id
-      return `${name} is a${"aeiou".includes(typeZero.toLowerCase()) ? "n" : ""} ${type}`
-    }).on('click', (e) => {
+    .attr("href", (d) => d.url ??
+      '#' // we need a href (eg '#') to be focusable even if it doesn't have a d.url so that the `title` is available
+    )
+    .attr("title", (d) =>
+      `Draft: ${typeof d.rfcNumber === 'number' ? `RFC ${d.rfcNumber} ` : ''}${d.id} (${d.isReceived ? 'Received' : 'Not received'}) (${startCase(d.disposition)})`
+    ).on('click', (e) => {
       e.preventDefault()
       const { target } = e
       if (!(target instanceof SVGElement || target instanceof HTMLElement)) {
@@ -215,12 +190,16 @@ export function draw_graph(data: DataParam, pushRouter: (path: string) => void) 
       }
       const anchor = target.closest('a')
       if (!anchor) {
-        console.error("Couldn't find parent of ", target, { parents: getAncestors(target)})
+        console.error("Couldn't find parent of ", target, { parents: getAncestors(target) })
         return
       }
       const href = anchor.getAttribute('href')
       if (!href) {
-        console.error("Closest <a> didn't have `href` attribute.", { parents: getAncestors(target)})
+        console.error("Closest <a> didn't have `href` attribute.", { parents: getAncestors(target) })
+        return
+      }
+      if (href === '#') {
+        console.info('Ignoring href navigation to empty internal link ie "#"')
         return
       }
       console.log("SPA navigating to ", href)
@@ -228,13 +207,13 @@ export function draw_graph(data: DataParam, pushRouter: (path: string) => void) 
     })
 
   a.append("text")
-    .attr("fill", (d) => (d.isRfc || d.isReplaced ? white : black))
+    .attr("fill", (d) => (d.isRfc ? gray800 : black))
     .each((d) => {
       (d as Node).lines = lines({
         rfcNumber: d.rfcNumber,
         id: d.id,
       });
-      (d as Node).r = text_radius((d as Node).lines!)
+      (d as Node).r = textRadius((d as Node).lines!)
       max_r = Math.max((d as Node).r, max_r)
     })
     .selectAll("tspan")
@@ -249,27 +228,21 @@ export function draw_graph(data: DataParam, pushRouter: (path: string) => void) 
     .attr("stroke", black)
     .lower()
     .attr("fill", (d) => {
-      if (d.isRfc) {
-        return green
-      }
-      if (d.isReplaced) {
-        return orange
-      }
-      if (d.isDead) {
+      if (d.isReceived === false) {
         return red
       }
-      if (d.isExpired) {
-        return gray400
+      switch (d.disposition) {
+        case 'assigned':
+          return orange
+        case 'done':
+          return green
+        case 'in_progress':
+          return blue
       }
-      if (d["post-wg"]) {
-        return teal
-      }
-      if (d.group == "") {
-        return white
-      }
+      console.warn('Using default style for', d)
       return cyan
     })
-    .each((d) => ((d as Node).stroke = stroke(d)))
+    .each((d) => ((d as Node).stroke = strokeWidth(d)))
     .attr("r", (d) => {
       const dNode = d as Node
       if (dNode.stroke === undefined) {
@@ -287,7 +260,7 @@ export function draw_graph(data: DataParam, pushRouter: (path: string) => void) 
       return dNode.stroke
     })
     .attr("stroke-dasharray", (d) => {
-      if (d.group != "" || d.isRfc) {
+      if (d.isReceived || d.isRfc) {
         return 0
       }
       return 4
@@ -351,7 +324,7 @@ export function draw_graph(data: DataParam, pushRouter: (path: string) => void) 
     // TODO: figure out how to combine this with above
     link.attr("d", function (d) {
       const dLink = d as unknown as Link
-      if(!(this instanceof SVGPathElement)) {
+      if (!(this instanceof SVGPathElement)) {
         console.error('SVGPathElement expected but was ', this)
         throw Error('Expected SVGPathElement. See console')
       }
