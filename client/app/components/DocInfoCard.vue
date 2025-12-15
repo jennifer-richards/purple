@@ -53,7 +53,7 @@
         <DescriptionListItem term="RFC Number" :spacing="spacing">
           <DescriptionListDetails>
             <div v-if="!props.isReadOnly" class="flex items-center gap-2">
-              <EditRfcNumber :name="rfcToBe.name" :initial-rfc-number="rfcToBe.rfcNumber" :on-success="() => props.refresh()" />
+              <EditRfcNumber :name="rfcToBe.name" :initial-rfc-number="rfcToBe.rfcNumber" :on-success="() => props.refresh?.()" />
             </div>
             <div v-else class="font-mono">
               {{ rfcToBe.rfcNumber || '(none)' }}
