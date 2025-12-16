@@ -6,6 +6,8 @@ import * as d3 from "d3"
 import { black, blue, cyan, font, getHumanReadableRelationshipName, gray200, gray800, green, line_height, orange, red, ref_type, teal, white, yellow, type Data, type DataParam, type Line, type Link, type LinkParam, type Node, type NodeParam, type Relationship } from "./document_relations-utils"
 import { getAncestors } from './dom'
 
+const TOOLTIP_BUFFER_Y = 5
+
 const link_color: Record<Relationship, string> = {
   "refqueue": green,
   "not-received": red,
@@ -31,18 +33,6 @@ const getName = (sourceOrTarget: Link["source"] | LinkParam["source"]): string =
 }
 
 const DEFAULT_STROKE = 10
-
-const strokeWidth = (d: NodeParam): number => {
-  switch (d.disposition) {
-    case 'assigned':
-      return 3
-    case 'done':
-      return 1
-    case 'in_progress':
-      return 6
-  }
-  return 0
-}
 
 // code partially adapted from
 // https://observablehq.com/@mbostock/fit-text-to-circle
@@ -118,7 +108,16 @@ function textRadius(lines: Line[]) {
 
 export type DrawGraphParameters = Parameters<typeof drawGraph>
 
-export function drawGraph(data: DataParam, pushRouter: (path: string) => void, colorMode: "light" | "dark") {
+export type SetTooltip = (props?: undefined | { text: string[], position: [number, number] }) => void
+
+type Props = {
+  data: DataParam,
+  pushRouter: (path: string) => void,
+  colorMode: "light" | "dark",
+  setTooltip: SetTooltip
+}
+
+export function drawGraph({ data, pushRouter, colorMode, setTooltip }: Props) {
   const zoom = d3
     .zoom<SVGSVGElement, unknown>()
     .scaleExtent([1 / 32, 32])
@@ -157,15 +156,53 @@ export function drawGraph(data: DataParam, pushRouter: (path: string) => void, c
     .append("path")
     .attr("d", "M0,-5L10,0L0,5")
 
+const LINE_STROKE_WIDTH = 5
+
+  // links between circles
   const link = svg
     .append("g")
     .attr("fill", "none")
-    .attr("stroke-width", 5)
+    .attr("stroke-width", LINE_STROKE_WIDTH)
     .selectAll("path")
     .data(data.links)
     .join("path")
     .attr("title", (d) => {
-      return `Relationship: ${getName(d.source)} ${getHumanReadableRelationshipName(d.rel)} ${getName(d.target)}`
+      return getLinkTitle(d)
+    })
+    .on("focus mouseover", function (e, d) {
+      d3.select(this).transition()
+        .duration(200)
+        .attr("opacity", 0.5)
+
+      e.preventDefault()
+      const { target } = e
+      if (!(target instanceof SVGElement || target instanceof HTMLElement)) {
+        console.error("Expected element but received ", target)
+        return
+      }
+      const titleElement = target.closest('[title]')
+      if (!titleElement) {
+        console.error("Couldn't find title element of ", target, { parents: getAncestors(target) })
+        return
+      }
+      const boundingClientRect = titleElement.getBoundingClientRect()
+
+      const title = titleElement.getAttribute('title')
+      if (!title) {
+        console.warn("couldn't find title attribute for tooltip")
+        return
+      }
+      setTooltip({
+        text: getLinkTitle(d),
+        position: [boundingClientRect.left + window.scrollX, boundingClientRect.top + window.scrollY - TOOLTIP_BUFFER_Y]
+      })
+    })
+    .on('blur mouseout', function () {
+      d3.select(this).transition()
+        .duration(200)
+        .attr("opacity", 1)
+
+      setTooltip()
     })
     .attr("marker-end", (d) => `url(#marker-${d.rel})`)
     .attr("stroke", (d) => getLinkColor(d.rel))
@@ -179,9 +216,35 @@ export function drawGraph(data: DataParam, pushRouter: (path: string) => void, c
     .attr("href", (d) => d.url ??
       '#' // we need a href (eg '#') to be focusable even if it doesn't have a d.url so that the `title` is available
     )
-    .attr("title", (d) =>
-      `Draft: ${typeof d.rfcNumber === 'number' ? `RFC ${d.rfcNumber} ` : ''}${d.id} (${d.isReceived ? 'Received' : 'Not received'}) ${d.disposition ? `(${startCase(d.disposition)})` : ''}`
-    ).on('click', (e) => {
+    .attr("title", (d) => getNodeTitle(d).join(" "))
+    .on("focus mouseover", function(e, d){
+      e.preventDefault()
+      const { target } = e
+      if (!(target instanceof SVGElement || target instanceof HTMLElement)) {
+        console.error("Expected element but received ", target)
+        return
+      }
+      const titleElement = target.closest('[title]')
+      if (!titleElement) {
+        console.error("Couldn't find title attribute in parents of ", target, { parents: getAncestors(target) })
+        return
+      }
+      const boundingClientRect = titleElement.getBoundingClientRect()
+
+      const title = titleElement.getAttribute('title')
+      if (!title) {
+        console.warn("couldn't find title attribute for tooltip")
+        return
+      }
+      setTooltip({
+        text: getNodeTitle(d),
+        position: [boundingClientRect.left + window.scrollX, boundingClientRect.top + window.scrollY - TOOLTIP_BUFFER_Y]
+      })
+    })
+    .on('blur mouseout', () => {
+      setTooltip()
+    })
+    .on('click', (e) => {
       e.preventDefault()
       const { target } = e
       if (!(target instanceof SVGElement || target instanceof HTMLElement)) {
@@ -207,10 +270,10 @@ export function drawGraph(data: DataParam, pushRouter: (path: string) => void, c
     })
 
   a.append("text")
-    .attr("fill", (d) => (d.isRfc ? colorMode === 'light' ? gray800 : gray200 : colorMode === 'light' ? black : white))
+    .attr("fill", (d) => (d.rfcToBe ? colorMode === 'light' ? gray800 : gray200 : colorMode === 'light' ? black : white))
     .each((d) => {
       (d as Node).lines = lines({
-        rfcNumber: d.rfcNumber,
+        rfcNumber: d.rfcToBe?.rfcNumber ?? undefined,
         id: d.id,
       });
       (d as Node).r = textRadius((d as Node).lines!)
@@ -228,7 +291,7 @@ export function drawGraph(data: DataParam, pushRouter: (path: string) => void, c
     .attr("stroke", black)
     .lower()
     .attr("fill", (d) => {
-      if (d.isReceived === false) {
+      if (!d.isReceived) {
         return red
       }
       switch (d.disposition) {
@@ -242,7 +305,21 @@ export function drawGraph(data: DataParam, pushRouter: (path: string) => void, c
       console.warn('Using default style for', d)
       return cyan
     })
-    .each((d) => ((d as Node).stroke = strokeWidth(d)))
+    .each((d) => {
+      switch (d.disposition) {
+        case 'assigned':
+          (d as Node).stroke = 3
+          break
+        case 'done':
+          (d as Node).stroke = 1
+          break
+        case 'in_progress':
+          (d as Node).stroke = 6
+          break
+        default:
+          (d as Node).stroke = 4
+      }
+    })
     .attr("r", (d) => {
       const dNode = d as Node
       if (dNode.stroke === undefined) {
@@ -260,10 +337,13 @@ export function drawGraph(data: DataParam, pushRouter: (path: string) => void, c
       return dNode.stroke
     })
     .attr("stroke-dasharray", (d) => {
-      if (d.isReceived || d.isRfc) {
-        return 0
+      if (d.rfcToBe) {
+        return 8
       }
-      return 4
+      if (!d.isReceived) {
+        return 4
+      }
+      return 0
     })
 
   const adjust = DEFAULT_STROKE / 2
@@ -401,8 +481,8 @@ export function drawGraph(data: DataParam, pushRouter: (path: string) => void, c
             const dNode = d as Node
             return dNode.id
           })
-          .distance(0),
-        // .strength(1)
+          .distance(0)
+          .strength(0.1)
       )
       .force("charge", d3.forceManyBody().strength(-max_r))
       .force("collision", d3.forceCollide(1.25 * max_r))
@@ -410,5 +490,19 @@ export function drawGraph(data: DataParam, pushRouter: (path: string) => void, c
       .force("y", d3.forceY())
       .stop()
       .on("tick", ticked),
+  ]
+}
+
+const getNodeTitle = (d: NodeParam): string[] => {
+  return [
+    d.isReceived ? 'Received' : 'Not received',
+    d.disposition ? `Disposition ${startCase(d.disposition)}` : 'No disposition',
+    d.rfcToBe?.rfcNumber ? `RFC ${d.rfcToBe.rfcNumber}` : ''
+  ].filter(line => typeof line === 'string')
+}
+
+const getLinkTitle = (d: LinkParam): string[] => {
+  return [
+    getHumanReadableRelationshipName(d.rel),
   ]
 }
