@@ -108,8 +108,6 @@ export const calculatePeopleWorkload = (clusters: Cluster[], queueItems: Pick<Qu
 
   const addToPersonWorkload = (personId: number | null | undefined, clusterIds: number[], role: Assignment['role'], pageCount: number | undefined): void => {
     assertIsNumber(personId)
-
-    console.log({ pageCount })
     assert(role.length !== 0)
     assert(typeof pageCount === 'number')
 
@@ -126,7 +124,7 @@ export const calculatePeopleWorkload = (clusters: Cluster[], queueItems: Pick<Qu
     peopleWorkload[personId] = editorWorkload
   }
   queueItems.forEach(doc => {
-    const clustersWithDocument = clusters.filter(cluster => cluster.documents.some(clusterDocument =>
+    const clustersWithDocument = clusters.filter(cluster => cluster.documents?.some(clusterDocument =>
       clusterDocument.name === doc.name
     ))
     const clusterIds = clustersWithDocument.map(cluster => cluster.number)
