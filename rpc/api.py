@@ -1,6 +1,7 @@
 # Copyright The IETF Trust 2023-2025, All Rights Reserved
 
 import datetime
+import logging
 import re
 from collections import defaultdict
 from dataclasses import dataclass
@@ -36,8 +37,6 @@ from rest_framework.exceptions import (
 )
 from rest_framework.generics import ListAPIView
 from rest_framework.pagination import LimitOffsetPagination
-from rest_framework.parsers import MultiPartParser
-from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rules.contrib.rest_framework import AutoPermissionViewSetMixin
 
@@ -112,7 +111,10 @@ from .serializers import (
     VersionInfoSerializer,
     check_user_has_role,
 )
+from .tasks import send_mail_task
 from .utils import VersionInfo, create_rpc_related_document, get_or_create_draft_by_name
+
+logger = logging.getLogger(__name__)
 
 
 @extend_schema(operation_id="version", responses=VersionInfoSerializer)
@@ -1403,26 +1405,25 @@ class ApprovalLogMessageViewSet(viewsets.ModelViewSet):
 
 
 class Mail(views.APIView):
-    parser_classes = [MultiPartParser]  # needed for FileField
-    permission_classes = [AllowAny]  # todo not this
-
     @extend_schema(
         operation_id="mail_send",
         request=MailMessageSerializer,
         responses=MailResponseSerializer,
     )
     def post(self, request, format=None):
-        # todo actually send mail
-        # todo debug whether attachments work as intended
         serializer = MailMessageSerializer(data=request.data)
-        if serializer.is_valid():
-            print(f"to: {serializer.validated_data['to']}")
-            print(f"cc: {serializer.validated_data['cc']}")
-            print(f"subject: {serializer.validated_data['subject']}")
-            for attachment in serializer.validated_data["attachments"]:
-                print(f"attachment: {attachment['name']}")
-        else:
-            print(serializer.errors)
+        serializer.is_valid(raise_exception=True)
+        logger.info(
+            "Queuing mail: subject '%s', to: '%s'",
+            serializer.validated_data["subject"],
+            ",".join(serializer.validated_data["to"]),
+        )
+        send_mail_task.delay(
+            subject=serializer.validated_data["subject"],
+            body=serializer.validated_data["body"],
+            to=serializer.validated_data["to"],
+            cc=serializer.validated_data["cc"],
+        )
         return Response(
             MailResponseSerializer(
                 {
@@ -1434,8 +1435,6 @@ class Mail(views.APIView):
 
 
 class RfcMailTemplatesList(views.APIView):
-    permission_classes = [AllowAny]  # todo not this
-
     @extend_schema(
         responses=MailTemplateSerializer(many=True),
         parameters=[
@@ -1464,8 +1463,8 @@ class RfcMailTemplatesList(views.APIView):
                     "label": label,
                     "template": {
                         "msgtype": msgtype,
-                        "to": "someone@example.com",
-                        "cc": "nobody@example.com",
+                        "to": ["someone@example.com"],
+                        "cc": ["nobody@example.com"],
                         "subject": f"Message that is a {label}",
                         "body": (
                             render_to_string(
