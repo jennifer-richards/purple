@@ -14,12 +14,6 @@ export type ProfileData = {
   isManager: boolean
 }
 
-type PretendingToBe = {
-  pretendingToBe: number | null
-}
-
-type State = ProfileData & PretendingToBe
-
 const getCurrentRelativePath = (): string => {
   const locationStr = location.toString() // stringify the whole URL including path, query params, hash
   const relativePath = locationStr.substring(locationStr.indexOf(location.host) + location.host.length)
@@ -41,15 +35,14 @@ const reloadPageSoon = (profileData?: ProfileData | void): void => {
 
 export const useUserStore = defineStore('user', {
   state: () => {
-    const defaultState: State = {
+    const defaultState: ProfileData = {
       authenticated: undefined,
       id: null,
       name: '',
       email: '',
       avatar: '',
       rpcPersonId: null,
-      isManager: false,
-      pretendingToBe: null // demo/debug only! FIXME: disallow on prod?
+      isManager: false
     }
     return defaultState
   },
@@ -57,9 +50,7 @@ export const useUserStore = defineStore('user', {
   actions: {
     async refreshAuth () {
       const profileData = await $fetch<ProfileData>(
-        this.pretendingToBe
-          ? `/api/rpc/profile/${this.pretendingToBe}`
-          : '/api/rpc/profile/'
+        '/api/rpc/profile/'
       ).catch(e => {
         console.error('Error loading profile', e)
       })
@@ -89,10 +80,6 @@ export const useUserStore = defineStore('user', {
       } else {
         return reloadPageSoon(profileData)
       }
-    },
-    pretendToBe (rpcPersonId: number | null): Promise<void> {
-      this.pretendingToBe = rpcPersonId
-      return this.refreshAuth()
     }
   }
 })
