@@ -57,35 +57,6 @@
           <Icon name="solar:bell-bold-duotone" size="1.25em" aria-hidden="true" />
         </button>
 
-        <!-- Select User (for demo only) -->
-        <HeadlessMenu v-if="allUsers && allUsers.length > 0" as="div" class="relative">
-          <HeadlessMenuButton class="-m-2.5 mx-2 text-gray-400 dark:text-neutral-400 hover:text-gray-500 dark:hover:text-violet-400">
-            <span class="sr-only">Select user (for demo only)</span>
-            <Icon name="solar:users-group-two-rounded-line-duotone" size="1.25em" aria-hidden="true" />
-          </HeadlessMenuButton>
-          <transition enter-active-class="transition ease-out duration-100" enter-from-class="transform opacity-0 scale-95" enter-to-class="transform opacity-100 scale-100" leave-active-class="transition ease-in duration-75" leave-from-class="transform opacity-100 scale-100" leave-to-class="transform opacity-0 scale-95">
-            <HeadlessMenuItems class="absolute left-0 z-10 mt-2.5 min-w-max origin-top-left rounded-md bg-white py-2 shadow-lg ring-1 ring-gray-900/5 focus:outline-none">
-              <HeadlessMenuItem v-if="userStore.pretendingToBe" v-slot="{ active }">
-                <div
-                  :class="[active ? 'bg-gray-50' : '', 'block px-3 py-1 text-sm leading-6 text-gray-900']"
-                  @click="switchUser(null)">
-                  Yourself
-                </div>
-              </HeadlessMenuItem>
-              <HeadlessMenuItem v-for="item in allUsers" :key="item.id" v-slot="{ active }">
-                <div
-                  :class="[active ? 'bg-gray-50' : '', 'block px-3 py-1 text-sm leading-6 text-gray-900']"
-                  @click="switchUser(item.id ?? null)">
-                  <Icon
-                    v-if="item.id === userStore.pretendingToBe"
-                    name="uil:arrow-right" class="h-6 w-6 -ml-1" aria-hidden="true" />
-                  {{ item.name }}
-                </div>
-              </HeadlessMenuItem>
-            </HeadlessMenuItems>
-          </transition>
-        </HeadlessMenu>
-
         <!-- Separator -->
         <div class="hidden lg:block lg:h-6 lg:w-px lg:bg-gray-900/10 dark:lg:bg-white/20" aria-hidden="true" />
 
@@ -124,8 +95,6 @@ import { useSiteStore } from '@/stores/site'
 import { useUserStore } from '@/stores/user'
 import { STICKY_DOM_ID } from '~/utils/scroll'
 
-const api = useApi()
-const csrf = useCookie('csrftoken', { sameSite: 'strict' })
 const buttonId = useId() // avoid a hydration error - see https://github.com/nuxt/ui/issues/1171
 
 // STORES
@@ -133,42 +102,10 @@ const buttonId = useId() // avoid a hydration error - see https://github.com/nux
 const siteStore = useSiteStore()
 const userStore = useUserStore()
 
-// FUNCTIONS
-
-function switchUser (rpcPersonId: number | null) {
-  userStore.pretendToBe(rpcPersonId)
-}
 // DATA
 
 const userNavigation = [
   { name: 'Your profile', href: '/' }
 ]
-
-const { data: allUsers } = await useAsyncData(
-  'allUsers',
-  async () => {
-    try {
-      return await api.rpcPersonList()
-    } catch {
-      // nop
-    }
-  },
-  {
-    default: () => ([]),
-    server: false,
-    transform: (resp) => resp?.toSorted((a, b) => {
-      if (!a.name && !b.name) {
-        return 0
-      }
-      if (!a.name) {
-        return -1
-      }
-      if (!b.name) {
-        return 1
-      }
-      return a.name.localeCompare(b.name)
-    })
-  }
-)
 
 </script>
