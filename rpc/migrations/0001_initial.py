@@ -10,6 +10,7 @@ import simple_history.models
 from django.conf import settings
 from django.db import migrations, models
 
+import purple.mail
 import rpc.models
 
 
@@ -486,6 +487,36 @@ class Migration(migrations.Migration):
                         validators=[rpc.models.validate_not_unusable_rfc_number],
                     ),
                 ),
+                ("title", models.CharField(help_text="Document title", max_length=255)),
+                (
+                    "abstract",
+                    models.TextField(
+                        blank=True, help_text="Document abstract", max_length=32000
+                    ),
+                ),
+                (
+                    "group",
+                    models.CharField(
+                        blank=True,
+                        help_text=(
+                            "Acronym of datatracker group where this document "
+                            "originated, if any"
+                        ),
+                        max_length=40,
+                    ),
+                ),
+                (
+                    "pages",
+                    models.PositiveIntegerField(help_text="Page count", null=True),
+                ),
+                (
+                    "keywords",
+                    models.CharField(
+                        blank=True,
+                        help_text="Comma-separated list of keywords",
+                        max_length=1000,
+                    ),
+                ),
                 ("external_deadline", models.DateTimeField(blank=True, null=True)),
                 ("internal_goal", models.DateTimeField(blank=True, null=True)),
                 ("published_at", models.DateTimeField(blank=True, null=True)),
@@ -565,6 +596,30 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 (
+                    "iesg_contact",
+                    models.ForeignKey(
+                        blank=True,
+                        db_constraint=False,
+                        help_text="Responsible or shepherding AD, if any",
+                        null=True,
+                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        related_name="+",
+                        to="datatracker.datatrackerperson",
+                    ),
+                ),
+                (
+                    "shepherd",
+                    models.ForeignKey(
+                        blank=True,
+                        db_constraint=False,
+                        help_text="Document shepherd",
+                        null=True,
+                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        related_name="+",
+                        to="datatracker.datatrackerperson",
+                    ),
+                ),
+                (
                     "submitted_format",
                     models.ForeignKey(
                         blank=True,
@@ -576,10 +631,11 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 (
-                    "intended_std_level",
+                    "publication_std_level",
                     models.ForeignKey(
                         blank=True,
                         db_constraint=False,
+                        help_text="StdLevel at publication (blank until published)",
                         null=True,
                         on_delete=django.db.models.deletion.DO_NOTHING,
                         related_name="+",
@@ -587,10 +643,11 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 (
-                    "submitted_std_level",
+                    "std_level",
                     models.ForeignKey(
                         blank=True,
                         db_constraint=False,
+                        help_text="Current StdLevel",
                         null=True,
                         on_delete=django.db.models.deletion.DO_NOTHING,
                         related_name="+",
@@ -598,10 +655,11 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 (
-                    "intended_stream",
+                    "publication_stream",
                     models.ForeignKey(
                         blank=True,
                         db_constraint=False,
+                        help_text="Stream at publication (blank until published)",
                         null=True,
                         on_delete=django.db.models.deletion.DO_NOTHING,
                         related_name="+",
@@ -609,10 +667,11 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 (
-                    "submitted_stream",
+                    "stream",
                     models.ForeignKey(
                         blank=True,
                         db_constraint=False,
+                        help_text="Current stream",
                         null=True,
                         on_delete=django.db.models.deletion.DO_NOTHING,
                         related_name="+",
@@ -620,29 +679,11 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 (
-                    "intended_boilerplate",
+                    "boilerplate",
                     models.ForeignKey(
                         blank=True,
                         db_constraint=False,
-                        help_text=(
-                            "TLP IPR boilerplate option intended to apply upon "
-                            "publication as RFC"
-                        ),
-                        null=True,
-                        on_delete=django.db.models.deletion.DO_NOTHING,
-                        related_name="+",
-                        to="rpc.tlpboilerplatechoicename",
-                    ),
-                ),
-                (
-                    "submitted_boilerplate",
-                    models.ForeignKey(
-                        blank=True,
-                        db_constraint=False,
-                        help_text=(
-                            "TLP IPR boilerplate option applicable when document "
-                            "entered the queue"
-                        ),
+                        help_text="TLP IPR boilerplate option",
                         null=True,
                         on_delete=django.db.models.deletion.DO_NOTHING,
                         related_name="+",
@@ -713,6 +754,36 @@ class Migration(migrations.Migration):
                         validators=[rpc.models.validate_not_unusable_rfc_number],
                     ),
                 ),
+                ("title", models.CharField(help_text="Document title", max_length=255)),
+                (
+                    "abstract",
+                    models.TextField(
+                        blank=True, help_text="Document abstract", max_length=32000
+                    ),
+                ),
+                (
+                    "group",
+                    models.CharField(
+                        blank=True,
+                        help_text=(
+                            "Acronym of datatracker group where this document "
+                            "originated, if any"
+                        ),
+                        max_length=40,
+                    ),
+                ),
+                (
+                    "pages",
+                    models.PositiveIntegerField(help_text="Page count", null=True),
+                ),
+                (
+                    "keywords",
+                    models.CharField(
+                        blank=True,
+                        help_text="Comma-separated list of keywords",
+                        max_length=1000,
+                    ),
+                ),
                 ("external_deadline", models.DateTimeField(blank=True, null=True)),
                 ("internal_goal", models.DateTimeField(blank=True, null=True)),
                 ("published_at", models.DateTimeField(blank=True, null=True)),
@@ -766,6 +837,28 @@ class Migration(migrations.Migration):
                         to="datatracker.document",
                     ),
                 ),
+                (
+                    "iesg_contact",
+                    models.ForeignKey(
+                        blank=True,
+                        help_text="Responsible or shepherding AD, if any",
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="+",
+                        to="datatracker.datatrackerperson",
+                    ),
+                ),
+                (
+                    "shepherd",
+                    models.ForeignKey(
+                        blank=True,
+                        help_text="Document shepherd",
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="shepherded_rfctobe_set",
+                        to="datatracker.datatrackerperson",
+                    ),
+                ),
             ],
             options={
                 "verbose_name_plural": "RfcToBes",
@@ -816,6 +909,117 @@ class Migration(migrations.Migration):
             options={
                 "ordering": ["rfc_to_be", "order"],
             },
+        ),
+        migrations.CreateModel(
+            name="MetadataValidationResults",
+            fields=[
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("received_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "head_sha",
+                    models.CharField(
+                        blank=True,
+                        help_text="Head SHA of the commit that was validated",
+                        max_length=40,
+                        null=True,
+                    ),
+                ),
+                ("metadata", models.JSONField(blank=True, null=True)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("pending", "Pending"),
+                            ("success", "Success"),
+                            ("failed", "Failed"),
+                        ],
+                        default="pending",
+                        max_length=20,
+                    ),
+                ),
+                ("detail", models.TextField(blank=True, null=True)),
+                (
+                    "rfc_to_be",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT, to="rpc.rfctobe"
+                    ),
+                ),
+            ],
+            options={
+                "ordering": ["-received_at"],
+            },
+        ),
+        migrations.CreateModel(
+            name="MailMessage",
+            fields=[
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "msgtype",
+                    models.CharField(
+                        choices=[
+                            ("blank", "freeform"),
+                            ("finalapproval", "final approval"),
+                            ("publication", "publication announcement"),
+                        ],
+                        max_length=64,
+                    ),
+                ),
+                ("to", rpc.models.AddressListField(max_length=1000)),
+                ("cc", rpc.models.AddressListField(blank=True, max_length=1000)),
+                ("subject", models.CharField(max_length=1000)),
+                ("body", models.TextField()),
+                (
+                    "message_id",
+                    models.CharField(
+                        default=purple.mail.make_message_id, max_length=255
+                    ),
+                ),
+                ("attempts", models.PositiveSmallIntegerField(default=0)),
+                ("sent", models.BooleanField(default=False)),
+                (
+                    "draft",
+                    models.ForeignKey(
+                        blank=True,
+                        help_text="draft to which this message relates",
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        to="datatracker.document",
+                    ),
+                ),
+                (
+                    "sender",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        to="datatracker.datatrackerperson",
+                    ),
+                ),
+                (
+                    "rfctobe",
+                    models.ForeignKey(
+                        blank=True,
+                        help_text="RfcToBe to which this message relates",
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        to="rpc.rfctobe",
+                    ),
+                ),
+            ],
         ),
         migrations.CreateModel(
             name="HistoricalRpcDocumentComment",
@@ -1634,8 +1838,11 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name="rfctobe",
-            name="intended_std_level",
+            name="publication_std_level",
             field=models.ForeignKey(
+                blank=True,
+                help_text="StdLevel at publication (blank until published)",
+                null=True,
                 on_delete=django.db.models.deletion.PROTECT,
                 related_name="+",
                 to="rpc.stdlevelname",
@@ -1643,8 +1850,9 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name="rfctobe",
-            name="submitted_std_level",
+            name="std_level",
             field=models.ForeignKey(
+                help_text="Current StdLevel",
                 on_delete=django.db.models.deletion.PROTECT,
                 related_name="+",
                 to="rpc.stdlevelname",
@@ -1652,8 +1860,11 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name="rfctobe",
-            name="intended_stream",
+            name="publication_stream",
             field=models.ForeignKey(
+                blank=True,
+                help_text="Stream at publication (blank until published)",
+                null=True,
                 on_delete=django.db.models.deletion.PROTECT,
                 related_name="+",
                 to="rpc.streamname",
@@ -1661,8 +1872,9 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name="rfctobe",
-            name="submitted_stream",
+            name="stream",
             field=models.ForeignKey(
+                help_text="Current stream",
                 on_delete=django.db.models.deletion.PROTECT,
                 related_name="+",
                 to="rpc.streamname",
@@ -1758,25 +1970,9 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name="rfctobe",
-            name="intended_boilerplate",
+            name="boilerplate",
             field=models.ForeignKey(
-                help_text=(
-                    "TLP IPR boilerplate option intended to apply upon publication as "
-                    "RFC"
-                ),
-                on_delete=django.db.models.deletion.PROTECT,
-                related_name="+",
-                to="rpc.tlpboilerplatechoicename",
-            ),
-        ),
-        migrations.AddField(
-            model_name="rfctobe",
-            name="submitted_boilerplate",
-            field=models.ForeignKey(
-                help_text=(
-                    "TLP IPR boilerplate option applicable when document entered the "
-                    "queue"
-                ),
+                help_text="TLP IPR boilerplate option",
                 on_delete=django.db.models.deletion.PROTECT,
                 related_name="+",
                 to="rpc.tlpboilerplatechoicename",
@@ -1818,7 +2014,19 @@ class Migration(migrations.Migration):
                 deferrable=django.db.models.constraints.Deferrable["DEFERRED"],
                 fields=("rfc_to_be", "order"),
                 name="unique_author_order_per_document",
-                violation_error_message="each author order must be unique per document",
+                violation_error_message=(
+                    "each author order must be unique per document"
+                ),
+            ),
+        ),
+        migrations.AddConstraint(
+            model_name="metadatavalidationresults",
+            constraint=models.UniqueConstraint(
+                fields=("rfc_to_be",),
+                name="unique_metadata_validation_per_rfc_to_be",
+                violation_error_message=(
+                    "There can be only one MetadataValidationResults per rfc_to_be.",
+                ),
             ),
         ),
         migrations.AddConstraint(
