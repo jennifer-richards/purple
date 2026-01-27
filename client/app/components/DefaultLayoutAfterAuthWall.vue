@@ -1,4 +1,5 @@
 <template>
+  <NuxtSnackbar />
   <div>
     <SidebarNav />
     <main class="lg:pl-72">
