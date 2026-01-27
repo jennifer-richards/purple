@@ -1,4 +1,4 @@
-# Copyright The IETF Trust 2023-2025, All Rights Reserved
+# Copyright The IETF Trust 2023-2026, All Rights Reserved
 
 import datetime
 import warnings
@@ -1451,3 +1451,11 @@ class MetadataValidationResultsSerializer(serializers.ModelSerializer):
         """Check if there are any metadata errors"""
         comparator = self._get_comparator(obj)
         return comparator.is_error()
+
+
+class PublishRfcSerializer(serializers.Serializer):
+    head_sha = serializers.CharField(
+        min_length=40,
+        max_length=40,
+        help_text="Commit hash of repository HEAD intended for publication",
+    )
