@@ -13,8 +13,7 @@
       @close-ok="overlayModalState.promiseResolve"
       @close-cancel="overlayModalState.promiseReject"
     />
-    <NuxtSnackbar />
-  </div>
+</div>
 </template>
 
 <script setup lang="ts">
