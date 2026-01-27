@@ -1,5 +1,4 @@
 <template>
-  <NuxtSnackbar />
   <NuxtLayout>
     <NuxtPage />
   </NuxtLayout>
