@@ -1,4 +1,4 @@
-# Copyright The IETF Trust 2023-2025, All Rights Reserved
+# Copyright The IETF Trust 2023-2026, All Rights Reserved
 
 import datetime
 import logging
@@ -15,6 +15,7 @@ from django.db.models import (
     Exists,
     OuterRef,
     Prefetch,
+    Subquery,
 )
 from django.utils import timezone
 from rules import always_deny
@@ -94,8 +95,57 @@ def validate_not_unusable_rfc_number(value):
         )
 
 
+class RfcToBeQuerySet(models.QuerySet):
+    def in_queue(self):
+        return self.filter(disposition__slug__in=("created", "in_progress"))
+
+    def with_enqueued_at(self):
+        HistoricalRfcToBe = RfcToBe.history.model
+        enqueued_at_subquery = Subquery(
+            HistoricalRfcToBe.objects.filter(id=OuterRef("pk"), history_type="+")
+            .order_by("history_date")
+            .values("history_date")[:1]
+        )
+        return self.annotate(enqueued_at=enqueued_at_subquery)
+
+    def with_active_assignments(self):
+        return self.prefetch_related(
+            Prefetch(
+                "assignment_set",
+                queryset=Assignment.objects.exclude(
+                    state__in=ASSIGNMENT_INACTIVE_STATES
+                ).select_related("person__datatracker_person", "role"),
+                to_attr="active_assignments",
+            )
+        )
+
+    def with_active_actionholders(self):
+        return self.prefetch_related(
+            Prefetch(
+                "actionholder_set",
+                queryset=ActionHolder.objects.filter(
+                    completed__isnull=True
+                ).select_related("datatracker_person"),
+                to_attr="active_actionholders",
+            )
+        )
+
+    def with_blocking_reasons(self):
+        return self.prefetch_related(
+            Prefetch(
+                "rfctobeblockingreason_set",
+                queryset=RfcToBeBlockingReason.objects.filter(
+                    resolved__isnull=True
+                ).select_related("reason"),
+                to_attr="blocking_reasons",
+            )
+        )
+
+
 class RfcToBe(models.Model):
     """RPC representation of a pre-publication RFC"""
+
+    objects = RfcToBeQuerySet.as_manager()
 
     class IanaStatus(models.TextChoices):
         NO_ACTIONS = "no_actions", "This document has no IANA actions"

@@ -1,4 +1,4 @@
-# Copyright The IETF Trust 2023-2025, All Rights Reserved
+# Copyright The IETF Trust 2023-2026, All Rights Reserved
 
 import datetime
 import logging
@@ -10,7 +10,7 @@ import django_filters
 import rpcapi_client
 from django import forms
 from django.db import transaction
-from django.db.models import Max, OuterRef, Prefetch, Q, Subquery
+from django.db.models import Max, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
@@ -42,6 +42,7 @@ from rules.contrib.rest_framework import AutoPermissionViewSetMixin
 
 from datatracker.models import DatatrackerPerson, Document
 from datatracker.rpcapi import with_rpcapi
+from utils.rest_framework.permissions import HasApiKey
 
 from .lifecycle.metadata import Metadata, MetadataComparator
 from .lifecycle.publication import (
@@ -50,7 +51,6 @@ from .lifecycle.publication import (
 )
 from .models import (
     ASSIGNMENT_INACTIVE_STATES,
-    ActionHolder,
     ApprovalLogMessage,
     Assignment,
     Capability,
@@ -97,6 +97,7 @@ from .serializers import (
     MetadataValidationResultsSerializer,
     NameSerializer,
     NestedAssignmentSerializer,
+    PublicQueueItemSerializer,
     PublishRfcSerializer,
     QueueItemSerializer,
     RfcAuthorSerializer,
@@ -518,45 +519,29 @@ class QueueFilter(django_filters.FilterSet):
         fields = ["disposition", "pending_final_approval"]
 
 
-class QueueViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
-    # This is abusing the List action a bit - the "queue" is singular, so this
-    # lists its contents. Normally we'd expect the List action to list queues and
-    # the Retrieve action to retrieve a single queue. That does not apply to our
-    # concept of a singular queue, so I'm using this because it works.
-    HistoricalRfcToBe = RfcToBe.history.model
-    enqueued_at_sq = Subquery(
-        HistoricalRfcToBe.objects.filter(id=OuterRef("pk"), history_type="+")
-        .order_by("history_date")
-        .values("history_date")[:1]
-    )
+class QueueList(ListAPIView):
+    """Queue view for purple application"""
 
     queryset = (
-        RfcToBe.objects.filter(disposition__slug__in=("created", "in_progress"))
-        .annotate(enqueued_at=enqueued_at_sq)
-        .select_related(
-            "draft",
-        )
-        .prefetch_related(
-            "labels",
-            Prefetch(
-                "assignment_set",
-                queryset=Assignment.objects.exclude(
-                    state__in=ASSIGNMENT_INACTIVE_STATES
-                ).select_related("person__datatracker_person", "role"),
-                to_attr="active_assignments",
-            ),
-            Prefetch(
-                "actionholder_set",
-                queryset=ActionHolder.objects.filter(
-                    completed__isnull=True
-                ).select_related("datatracker_person"),
-                to_attr="active_actionholders",
-            ),
-        )
+        RfcToBe.objects.in_queue()
+        .with_enqueued_at()
+        .select_related("draft")
+        .prefetch_related("labels")
+        .with_active_assignments()
+        .with_active_actionholders()
+        .with_blocking_reasons()
     )
     serializer_class = QueueItemSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = QueueFilter
+
+
+class PublicQueueList(QueueList):
+    """Queue view for the public queue site"""
+
+    permission_classes = [HasApiKey]
+    api_key_endpoint = "api.pubq"
+    serializer_class = PublicQueueItemSerializer
 
 
 class CapabilityViewSet(viewsets.ReadOnlyModelViewSet):
