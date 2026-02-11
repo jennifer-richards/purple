@@ -823,6 +823,13 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
     ordering = ["-id"]
     pagination_class = DefaultLimitOffsetPagination
 
+    def get_object(self):
+        lookup_value = self.kwargs.get(self.lookup_field)
+        if lookup_value and str(lookup_value).startswith("rfc"):
+            self.lookup_field = "rfc_number"
+            self.kwargs[self.lookup_field] = int(lookup_value[3:])
+        return super().get_object()
+
     def get_queryset(self):
         queryset = super().get_queryset()
         form = RfcToBeQueryParamsForm(self.request.query_params)
