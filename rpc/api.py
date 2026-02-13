@@ -965,14 +965,105 @@ class RpcAuthorViewSet(viewsets.ModelViewSet):
 
 
 @extend_schema_with_draft_name()
-class RpcRelatedDocumentViewSet(viewsets.ModelViewSet):
+@extend_schema_view(
+    list=extend_schema(
+        description="Returns only relations for this draft that are pre-publishing "
+        "dependencies",
+        responses=RpcRelatedDocumentSerializer(many=True),
+    )
+)
+class RpcDocumentReferencesViewSet(viewsets.ModelViewSet):
     queryset = RpcRelatedDocument.objects.all()
     serializer_class = RpcRelatedDocumentSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_fields = ["relationship"]
 
     def get_queryset(self):
         return (
-            super().get_queryset().filter(source__draft__name=self.kwargs["draft_name"])
+            super()
+            .get_queryset()
+            .filter(
+                source__draft__name=self.kwargs["draft_name"],
+                relationship__slug__in=DocRelationshipName.REFERENCE_RELATIONSHIP_SLUGS,
+            )
         )
+
+
+@extend_schema_with_draft_name()
+@extend_schema_view(
+    list=extend_schema(
+        description="Returns only related relationships like obsoletes/updates for "
+        "this draft and also reverse relationships where this draft is the target "
+        "(e.g. updated_by, obsoleted_by)",
+        responses=RpcRelatedDocumentSerializer(many=True),
+    )
+)
+class RpcRelatedDocumentViewSet(viewsets.ModelViewSet):
+    queryset = RpcRelatedDocument.objects.all()
+    serializer_class = RpcRelatedDocumentSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_fields = ["relationship"]
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .filter(source__draft__name=self.kwargs["draft_name"])
+            .exclude(
+                relationship__slug__in=DocRelationshipName.REFERENCE_RELATIONSHIP_SLUGS
+            )
+        )
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        results = list(queryset)
+
+        draft_name = self.kwargs["draft_name"]
+        slug_filter = request.query_params.getlist("relationship")
+
+        class _ReverseRelationship:
+            def __init__(self, slug):
+                self.pk = slug
+                self.slug = slug
+
+        class _ReverseRpcRelatedDocument:
+            def __init__(self, id, relationship, source, target_rfctobe):
+                self.id = id
+                self.relationship = relationship
+                self.source = source
+                self.target_rfctobe = target_rfctobe
+                self.target_document = None
+
+        def append_reverse(rel_slug, fake_slug):
+            if slug_filter and fake_slug not in slug_filter:
+                return
+
+            reverse_qs = RpcRelatedDocument.objects.filter(
+                target_rfctobe__draft__name=draft_name,
+                relationship__slug=rel_slug,
+            ).select_related(
+                "source", "source__draft", "target_rfctobe", "target_rfctobe__draft"
+            )
+
+            for rel in reverse_qs:
+                results.append(
+                    _ReverseRpcRelatedDocument(
+                        id=rel.id,
+                        relationship=_ReverseRelationship(fake_slug),
+                        source=rel.target_rfctobe,
+                        target_rfctobe=rel.source,
+                    )
+                )
+
+        append_reverse("updates", "updated_by")
+        append_reverse("obs", "obsoleted_by")
+
+        page = self.paginate_queryset(results)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(results, many=True)
+        return Response(serializer.data)
 
     @extend_schema(
         request=CreateRpcRelatedDocumentSerializer,
@@ -1121,9 +1212,25 @@ class UnusableRfcNumberViewSet(viewsets.ModelViewSet):
         return super().partial_update(request, *args, **kwargs)
 
 
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            name="refs",
+            type=OpenApiTypes.BOOL,
+            location=OpenApiParameter.QUERY,
+            description="Return only reference relationships",
+        )
+    ]
+)
 class DocRelationshipNameViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = DocRelationshipName.objects.all()
     serializer_class = NameSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.request.query_params.get("refs") == "true":
+            return qs.filter(slug__in=DocRelationshipName.REFERENCE_RELATIONSHIP_SLUGS)
+        return qs
 
 
 class SourceFormatNameViewSet(viewsets.ReadOnlyModelViewSet):
