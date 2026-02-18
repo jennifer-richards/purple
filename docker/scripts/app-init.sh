@@ -8,6 +8,23 @@ git config --global --add safe.directory /workspace
 # Turn off git info in zsh prompt (causes slowdowns)
 git config oh-my-zsh.hide-info 1
 
+# Install client dependencies
+cd client
+npm install
+cd ..
+
+# Try to fetch datatracker API schema and build the client
+echo "Fetching datatracker API schema..."
+if wget -O rpcapi.yaml http://host.docker.internal:8000/api/schema/; then
+    echo "Building datatracker API client..."
+    npx --no @openapitools/openapi-generator-cli generate  --generator-key datatracker # config in openapitools.json
+    /usr/bin/mkdir -p openapi/rpcapi_client/
+    /bin/cp rpcapi.yaml openapi/rpcapi_client/.rpcapi.yaml
+    BUILT_API=yes
+else
+    echo "...API schema fetch failed"
+fi
+
 # Install requirements.txt dependencies
 echo "Installing dependencies from requirements.txt..."
 pip3 --disable-pip-version-check --no-cache-dir install --user --no-warn-script-location -r requirements.txt
@@ -20,11 +37,6 @@ sudo nginx
 echo "Waiting for DB container to come online..."
 /usr/local/bin/wait-for db:5432 -- echo "PostgreSQL ready"
 
-# Install client dependencies
-cd client
-npm install
-cd ..
-
 # Run migrations
 echo "Running migrations..."
 ./manage.py migrate --no-input || true
@@ -35,25 +47,15 @@ echo "Populating initial history..."
 # Collect statics
 ./manage.py collectstatic --no-input || true
 
-# Try to fetch datatracker API schema and build the client
-echo "Fetching datatracker API schema..."
-if wget -O rpcapi.yaml http://host.docker.internal:8000/api/schema/; then
-    echo "Building datatracker API client..."
-    client/node_modules/.bin/openapi-generator-cli generate  --generator-key datatracker # config in openapitools.json
-    /bin/cp rpcapi.yaml openapi/rpcapi_client/.rpcapi.yaml
-    BUILT_API=yes
-else
-    echo "...API schema fetch failed"
-fi
-
 # Django should be operational now. Build purple API client.
 ./manage.py spectacular --file purple_api.yaml && \
-    client/node_modules/.bin/openapi-generator-cli generate --generator-key purple  || true
-    echo "If not set, add @ts-nocheck in runtime.ts to avoid type errors from generated code"
-    if ! grep -q "// @ts-nocheck" "client/app/purple_client/runtime.ts"; then
-        sed -i '1i // @ts-nocheck' "client/app/purple_client/runtime.ts"
-    fi
-    /bin/cp purple_api.yaml client/app/purple_client/.purple_api.yaml
+    npx --no @openapitools/openapi-generator-cli generate --generator-key purple  || true
+# If not set, add @ts-nocheck in runtime.ts to avoid type errors from generated code
+if ! grep -q "// @ts-nocheck" "client/app/purple_client/runtime.ts"; then
+    sed -i '1i // @ts-nocheck' "client/app/purple_client/runtime.ts"
+fi
+/usr/bin/mkdir -p client/app/purple_client
+/bin/cp purple_api.yaml client/app/purple_client/.purple_api.yaml
 
 sudo touch /.dev-ready
 
