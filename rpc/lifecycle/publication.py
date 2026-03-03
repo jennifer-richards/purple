@@ -20,9 +20,9 @@ from rpcapi_client import ApiException
 
 from datatracker.rpcapi import with_rpcapi
 from datatracker.utils.publication import publish_rfc_metadata, upload_rfc_contents
+from rpc.models import PublicationAttempt, RfcToBe
 from rpcauth.models import User
 
-from ..models import RfcToBe
 from .repo import GithubRepository, RepositoryError, TemporaryRepositoryError
 
 logger = logging.getLogger(__name__)
@@ -113,6 +113,37 @@ def suffix_for_type(type_):
     return "." + type_
 
 
+def begin_publication_attempt(rfctobe: RfcToBe) -> bool:
+    """Signal the start of a publication attempt
+
+    Returns True if a publication is already pending. Raises PublicationFailedError
+    if the publication was already in the failed state.
+
+    If this method returns False, caller _must_ call or queue the publish_rfctobe_task
+    or call clear_any_publication_attempt().
+    """
+    pub_attempt, created = PublicationAttempt.objects.get_or_create(rfctobe=rfctobe)
+    if pub_attempt.status == pub_attempt.Status.FAILED:
+        raise PublicationFailedError()
+    return not created  # if we did not create the record, it was already in progress
+
+
+def clear_failed_publication_attempt(rfctobe: RfcToBe):
+    """Reset publication attempt state"""
+    PublicationAttempt.objects.filter(
+        rfctobe=rfctobe, state=PublicationAttempt.Status.FAILED
+    ).delete()
+
+
+def clear_publication_attempt(rfctobe: RfcToBe):
+    """Reset any publication attempt state (use with care)
+
+    Deletes any PublicationAttempt record for this RfcTobe. This should be used only
+    when it is known that no publication task is still pending.
+    """
+    PublicationAttempt.objects.filter(rfctobe=rfctobe).delete()
+
+
 @with_rpcapi
 def publish_rfctobe(
     rfctobe: RfcToBe, expected_head: str, *, rpcapi: rpcapi_client.PurpleApi
@@ -197,6 +228,7 @@ def publish_rfctobe(
         # the published_at timestamp and other publication fields earlier.
         rfctobe.disposition_id = "published"
         rfctobe.save()
+        clear_publication_attempt(rfctobe)
 
         try:
             upload_rfc_contents(
@@ -238,3 +270,7 @@ class MissingFilesError(PublicationError):
 
 class AmbiguousFilesError(PublicationError):
     """Unable to identify the files to upload"""
+
+
+class PublicationFailedError(PublicationError):
+    """Publication already failed"""

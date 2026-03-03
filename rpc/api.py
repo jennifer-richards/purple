@@ -47,6 +47,8 @@ from utils.rest_framework.permissions import HasApiKey
 
 from .lifecycle.metadata import Metadata, MetadataComparator
 from .lifecycle.publication import (
+    PublicationFailedError,
+    begin_publication_attempt,
     can_publish,
     validate_ready_to_publish,
 )
@@ -866,10 +868,16 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
         if not can_publish(rfctobe, request.user):
             raise PermissionDenied("User is not permitted to publish this RFC")
         validate_ready_to_publish(rfctobe)  # raises ValidationError
-        publish_rfctobe_task.delay(
-            rfctobe_id=rfctobe.pk, expected_head=serializer.validated_data["head_sha"]
-        )
-        return Response()  # todo return value
+        try:
+            already_pending = begin_publication_attempt(rfctobe)
+        except PublicationFailedError as err:
+            raise serializers.ValidationError("Publication already failed") from err
+        if not already_pending:
+            publish_rfctobe_task.delay(
+                rfctobe_id=rfctobe.pk,
+                expected_head=serializer.validated_data["head_sha"],
+            )
+        return Response()
 
     @extend_schema(
         operation_id="documents_sync_metadata",
