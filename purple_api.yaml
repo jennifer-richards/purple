@@ -709,6 +709,27 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/rpc/documents/{draft__name}/pubstatus/:
+    get:
+      operationId: documents_pubstatus_retrieve
+      parameters:
+      - in: path
+        name: draft__name
+        schema:
+          type: string
+          description: Name of draft
+        required: true
+      tags:
+      - purple
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishRfcStatus'
+          description: ''
   /api/rpc/documents/{draft__name}/sync_metadata/:
     post:
       operationId: documents_sync_metadata
@@ -728,8 +749,6 @@ paths:
       - cookieAuth: []
       responses:
         '200':
-          description: No response body
-        '400':
           description: No response body
   /api/rpc/documents/{draft_name}/action_holders/:
     get:
@@ -4768,6 +4787,17 @@ components:
           maxLength: 40
       required:
       - head_sha
+    PublishRfcStatus:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        detail:
+          type: string
+          maxLength: 1000
+      required:
+      - detail
+      - status
     QueueItem:
       type: object
       description: RfcToBe serializer suitable for displaying a queue of many
@@ -5336,6 +5366,18 @@ components:
         * `done` - Done
         * `withdrawn` - Withdrawn
         * `closed_for_hold` - Closed For Hold
+    StatusEnum:
+      enum:
+      - none
+      - pending
+      - published
+      - failed
+      type: string
+      description: |-
+        * `none` - none
+        * `pending` - pending
+        * `published` - published
+        * `failed` - failed
     Submission:
       type: object
       description: Serialize a submission

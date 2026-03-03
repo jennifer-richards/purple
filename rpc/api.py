@@ -3,7 +3,7 @@
 import datetime
 import logging
 import re
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from dataclasses import dataclass
 
 import django_filters
@@ -123,7 +123,7 @@ from .serializers import (
     SubseriesTypeNameSerializer,
     UnusableRfcNumberSerializer,
     VersionInfoSerializer,
-    check_user_has_role,
+    check_user_has_role, PublishRfcStatusSerializer,
 )
 from .tasks import publish_rfctobe_task, send_mail_task, validate_metadata_task
 from .utils import VersionInfo, create_rpc_related_document, get_or_create_draft_by_name
@@ -878,6 +878,25 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
                 expected_head=serializer.validated_data["head_sha"],
             )
         return Response()
+
+    @extend_schema(request=None, responses=PublishRfcStatusSerializer)
+    @action(detail=True, methods=["get"], url_path="pubstatus")
+    def publish_status(self, request, draft__name=None):
+        StatusTuple = namedtuple("StatusTuple", "status detail")
+        rfctobe = self.get_object()
+        if rfctobe.disposition_id == "published":
+            status = StatusTuple("published", "")
+        else:
+            try:
+                pub_attempt = rfctobe.publicationattempt
+            except RfcToBe.publicationattempt.RelatedObjectDoesNotExist:
+                status = StatusTuple("none", "")
+            else:
+                if pub_attempt.status == pub_attempt.Status.PENDING:
+                    status = StatusTuple("pending", "")
+                else:
+                    status = StatusTuple("failed", "")
+        return Response(PublishRfcStatusSerializer(status).data)
 
     @extend_schema(
         operation_id="documents_sync_metadata",
