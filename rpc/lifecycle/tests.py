@@ -1,7 +1,11 @@
-# Copyright The IETF Trust 2025, All Rights Reserved
+# Copyright The IETF Trust 2025-2026, All Rights Reserved
 import jsonschema.exceptions
 from django.test import TestCase
 
+from rpc.factories import RfcToBeFactory
+from rpc.models import PublicationAttempt, RfcToBe
+
+from .publication import begin_publication_attempt
 from .repo import Repository
 
 
@@ -47,3 +51,39 @@ class RepoTests(TestCase):
                 # no files
                 {"publications": [{"rfcNumber": 10000}]}
             )
+
+
+class PublicationTests(TestCase):
+    def test_begin_publication(self):
+        rfc_to_be = RfcToBeFactory()
+        assert isinstance(rfc_to_be, RfcToBe)
+        self.assertIsNone(
+            PublicationAttempt.objects.filter(rfc_to_be=rfc_to_be).first()
+        )
+
+        # nothing happening yet
+        already_pending = begin_publication_attempt(rfc_to_be)
+        self.assertFalse(already_pending)
+        self.assertEqual(
+            rfc_to_be.publicationattempt.status,
+            PublicationAttempt.Status.PENDING,
+        )
+
+        # already pending now
+        already_pending = begin_publication_attempt(rfc_to_be)
+        self.assertTrue(already_pending)
+        self.assertEqual(
+            rfc_to_be.publicationattempt.status,
+            PublicationAttempt.Status.PENDING,
+        )
+
+        # recover from failed attempt
+        PublicationAttempt.objects.filter(rfc_to_be=rfc_to_be).update(
+            status=PublicationAttempt.Status.FAILED
+        )
+        already_pending = begin_publication_attempt(rfc_to_be)
+        self.assertFalse(already_pending)
+        self.assertEqual(
+            rfc_to_be.publicationattempt.status,
+            PublicationAttempt.Status.PENDING,
+        )
