@@ -14,6 +14,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import rpcapi_client
+from django.db import transaction, IntegrityError
 from django.utils import timezone
 from rest_framework import serializers
 from rpcapi_client import ApiException
@@ -129,21 +130,33 @@ def begin_publication_attempt(rfctobe: RfcToBe) -> bool:
 
 
 def record_failed_publication_attempt(rfctobe: RfcToBe, detail: str):
-    pub_attempt, created = PublicationAttempt.objects.get_or_create(rfctobe=rfctobe)
-    if created:
-        logger.warning(
-            f"PublicationAttempt did not exist before recording failure for {rfctobe}"
-        )
-    elif pub_attempt.status != PublicationAttempt.Status.PENDING:
-        logger.warning(
-            f"PublicationAttempt status was {pub_attempt.status} when recording "
-            f"failure for {rfctobe}"
-        )
-    else:
-        pub_attempt.status = PublicationAttempt.Status.FAILED
-        pub_attempt.detail = detail
-        pub_attempt.save()
-
+    attempts = PublicationAttempt.objects.select_for_update().filter(rfctobe=rfctobe)
+    with transaction.atomic():
+        pub_attempt = attempts.first()
+        if pub_attempt is None:
+            logger.warning(
+                f"PublicationAttempt did not exist before recording failure for {rfctobe}"
+            )
+            try:
+                PublicationAttempt.objects.create(
+                    rfctobe=rfctobe,
+                    status=PublicationAttempt.Status.FAILED,
+                    detail=detail,
+                )
+            except IntegrityError:
+                logger.error(
+                    f"PublicationAttempt created by another process during execution "
+                    f"of record_failed_publication_attempt() for {rfctobe}"
+                )
+        elif pub_attempt.status != PublicationAttempt.Status.PENDING:
+            logger.warning(
+                f"PublicationAttempt status was {pub_attempt.status} when recording "
+                f"failure for {rfctobe}"
+            )
+        else:
+            attempts.update(
+                status=PublicationAttempt.Status.FAILED, detail=detail
+            )
 
 def clear_failed_publication_attempt(rfctobe: RfcToBe):
     """Reset publication attempt state"""
