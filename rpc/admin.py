@@ -220,5 +220,5 @@ class TaskRunAdmin(admin.ModelAdmin):
 
 @admin.register(PublicationAttempt)
 class PublicationAttemptAdmin(admin.ModelAdmin):
-    list_display = ["rfc_to_be", "status", "started_at"]
+    list_display = ["rfc_to_be", "status", "started_at", "detail"]
     raw_id_fields = ["rfc_to_be"]
