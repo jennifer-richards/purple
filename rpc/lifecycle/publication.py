@@ -14,7 +14,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import rpcapi_client
-from django.db import transaction, IntegrityError
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework import serializers
 from rpcapi_client import ApiException
@@ -117,16 +117,23 @@ def suffix_for_type(type_):
 def begin_publication_attempt(rfctobe: RfcToBe) -> bool:
     """Signal the start of a publication attempt
 
-    Returns True if a publication is already pending. Raises PublicationFailedError
-    if the publication was already in the failed state.
-
-    If this method returns False, caller _must_ call or queue the publish_rfctobe_task
-    or call clear_any_publication_attempt().
+    Returns True if a publication is already pending. If this method returns False,
+    caller _must_ call or queue the publish_rfctobe_task or call
+    clear_any_publication_attempt().
     """
-    pub_attempt, created = PublicationAttempt.objects.get_or_create(rfctobe=rfctobe)
-    if pub_attempt.status == pub_attempt.Status.FAILED:
-        raise PublicationFailedError()
-    return not created  # if we did not create the record, it was already in progress
+    with transaction.atomic():
+        pub_attempt, created = (
+            PublicationAttempt.objects.select_for_update().get_or_create(
+                rfc_to_be=rfctobe
+            )
+        )
+        if pub_attempt.status == PublicationAttempt.Status.PENDING:
+            already_pending = not created
+        else:
+            already_pending = False
+            pub_attempt.status = PublicationAttempt.Status.PENDING
+            pub_attempt.save()
+    return already_pending
 
 
 def record_failed_publication_attempt(rfctobe: RfcToBe, detail: str):
@@ -135,11 +142,12 @@ def record_failed_publication_attempt(rfctobe: RfcToBe, detail: str):
         pub_attempt = attempts.first()
         if pub_attempt is None:
             logger.warning(
-                f"PublicationAttempt did not exist before recording failure for {rfctobe}"
+                f"PublicationAttempt did not exist before recording failure "
+                f"for {rfctobe}"
             )
             try:
                 PublicationAttempt.objects.create(
-                    rfctobe=rfctobe,
+                    rfc_to_be=rfctobe,
                     status=PublicationAttempt.Status.FAILED,
                     detail=detail,
                 )
@@ -154,14 +162,13 @@ def record_failed_publication_attempt(rfctobe: RfcToBe, detail: str):
                 f"failure for {rfctobe}"
             )
         else:
-            attempts.update(
-                status=PublicationAttempt.Status.FAILED, detail=detail
-            )
+            attempts.update(status=PublicationAttempt.Status.FAILED, detail=detail)
+
 
 def clear_failed_publication_attempt(rfctobe: RfcToBe):
     """Reset publication attempt state"""
     PublicationAttempt.objects.filter(
-        rfctobe=rfctobe, state=PublicationAttempt.Status.FAILED
+        rfc_to_be=rfctobe, state=PublicationAttempt.Status.FAILED
     ).delete()
 
 
@@ -171,7 +178,7 @@ def clear_publication_attempt(rfctobe: RfcToBe):
     Deletes any PublicationAttempt record for this RfcTobe. This should be used only
     when it is known that no publication task is still pending.
     """
-    PublicationAttempt.objects.filter(rfctobe=rfctobe).delete()
+    PublicationAttempt.objects.filter(rfc_to_be=rfctobe).delete()
 
 
 @with_rpcapi
