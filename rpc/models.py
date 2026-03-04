@@ -1274,3 +1274,4 @@ class PublicationAttempt(models.Model):
         default=Status.PENDING,
         help_text="Record of an RFC publication request",
     )
+    detail = models.CharField(max_length=1000, blank=True)

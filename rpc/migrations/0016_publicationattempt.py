@@ -31,6 +31,7 @@ class Migration(migrations.Migration):
                         help_text="Record of an RFC publication request",
                     ),
                 ),
+                ("detail", models.CharField(blank=True, max_length=1000)),
                 (
                     "rfc_to_be",
                     models.OneToOneField(

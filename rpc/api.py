@@ -107,6 +107,7 @@ from .serializers import (
     NestedAssignmentSerializer,
     PublicQueueItemSerializer,
     PublishRfcSerializer,
+    PublishRfcStatusSerializer,
     QueueItemSerializer,
     RfcAuthorSerializer,
     RfcToBeHistorySerializer,
@@ -123,7 +124,7 @@ from .serializers import (
     SubseriesTypeNameSerializer,
     UnusableRfcNumberSerializer,
     VersionInfoSerializer,
-    check_user_has_role, PublishRfcStatusSerializer,
+    check_user_has_role,
 )
 from .tasks import publish_rfctobe_task, send_mail_task, validate_metadata_task
 from .utils import VersionInfo, create_rpc_related_document, get_or_create_draft_by_name
@@ -881,7 +882,7 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
 
     @extend_schema(request=None, responses=PublishRfcStatusSerializer)
     @action(detail=True, methods=["get"], url_path="pubstatus")
-    def publish_status(self, request, draft__name=None):
+    def pub_status(self, request, draft__name=None):
         StatusTuple = namedtuple("StatusTuple", "status detail")
         rfctobe = self.get_object()
         if rfctobe.disposition_id == "published":
@@ -892,10 +893,7 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
             except RfcToBe.publicationattempt.RelatedObjectDoesNotExist:
                 status = StatusTuple("none", "")
             else:
-                if pub_attempt.status == pub_attempt.Status.PENDING:
-                    status = StatusTuple("pending", "")
-                else:
-                    status = StatusTuple("failed", "")
+                status = pub_attempt
         return Response(PublishRfcStatusSerializer(status).data)
 
     @extend_schema(
