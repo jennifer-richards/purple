@@ -320,7 +320,3 @@ class MissingFilesError(PublicationError):
 
 class AmbiguousFilesError(PublicationError):
     """Unable to identify the files to upload"""
-
-
-class PublicationFailedError(PublicationError):
-    """Publication already failed"""
