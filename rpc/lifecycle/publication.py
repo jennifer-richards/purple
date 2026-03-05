@@ -171,19 +171,8 @@ def record_failed_publication_attempt(rfctobe: RfcToBe, detail: str):
             pub_attempt.save()
 
 
-def clear_failed_publication_attempt(rfctobe: RfcToBe):
-    """Reset publication attempt state"""
-    PublicationAttempt.objects.filter(
-        rfc_to_be=rfctobe, state=PublicationAttempt.Status.FAILED
-    ).delete()
-
-
 def clear_publication_attempt(rfctobe: RfcToBe):
-    """Reset any publication attempt state (use with care)
-
-    Deletes any PublicationAttempt record for this RfcTobe. This should be used only
-    when it is known that no publication task is still pending.
-    """
+    """Remove publication attempt record for an RfcToBe"""
     PublicationAttempt.objects.filter(rfc_to_be=rfctobe).delete()
 
 

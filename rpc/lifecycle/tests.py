@@ -4,10 +4,11 @@ import logging
 import jsonschema.exceptions
 from django.test import TestCase
 
-from rpc.factories import RfcToBeFactory
+from rpc.factories import RfcToBeFactory, PublicationAttemptFactory
 from rpc.models import PublicationAttempt, RfcToBe
 
-from .publication import begin_publication_attempt, record_failed_publication_attempt
+from .publication import begin_publication_attempt, record_failed_publication_attempt, \
+    clear_publication_attempt
 from .repo import Repository
 
 
@@ -120,3 +121,11 @@ class PublicationTests(TestCase):
             rfc_to_be.publicationattempt.status, PublicationAttempt.Status.FAILED
         )
         self.assertEqual(rfc_to_be.publicationattempt.detail, "bad mojo")
+        logging.disable(logging.NOTSET)
+
+    def test_clear_failed_publication_attempt(self):
+        rfctobes = [pa.rfc_to_be for pa in PublicationAttemptFactory.create_batch(2)]
+        self.assertEqual(PublicationAttempt.objects.count(), 2)
+        clear_publication_attempt(rfctobes[0])
+        self.assertEqual(PublicationAttempt.objects.count(), 1)
+        self.assertEqual(PublicationAttempt.objects.first().rfc_to_be, rfctobes[1])
