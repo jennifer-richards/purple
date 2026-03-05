@@ -876,7 +876,11 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
             )
         return Response()
 
-    @extend_schema(operation_id="documents_pub_status", request=None, responses=PublishRfcStatusSerializer)
+    @extend_schema(
+        operation_id="documents_pub_status",
+        request=None,
+        responses=PublishRfcStatusSerializer,
+    )
     @action(detail=True, methods=["get"], url_path="pub_status")
     def pub_status(self, request, draft__name=None):
         StatusTuple = namedtuple("StatusTuple", "status detail")

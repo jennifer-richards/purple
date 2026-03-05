@@ -4,11 +4,14 @@ import logging
 import jsonschema.exceptions
 from django.test import TestCase
 
-from rpc.factories import RfcToBeFactory, PublicationAttemptFactory
+from rpc.factories import PublicationAttemptFactory, RfcToBeFactory
 from rpc.models import PublicationAttempt, RfcToBe
 
-from .publication import begin_publication_attempt, record_failed_publication_attempt, \
-    clear_publication_attempt
+from .publication import (
+    begin_publication_attempt,
+    clear_publication_attempt,
+    record_failed_publication_attempt,
+)
 from .repo import Repository
 
 

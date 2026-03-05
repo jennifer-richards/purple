@@ -139,9 +139,9 @@ def begin_publication_attempt(rfctobe: RfcToBe) -> bool:
 def record_failed_publication_attempt(rfctobe: RfcToBe, detail: str):
     with transaction.atomic():
         pub_attempt = (
-            PublicationAttempt.objects.select_for_update().filter(
-                rfc_to_be=rfctobe
-            ).first()
+            PublicationAttempt.objects.select_for_update()
+            .filter(rfc_to_be=rfctobe)
+            .first()
         )
         if pub_attempt is None:
             logger.warning(
@@ -166,8 +166,8 @@ def record_failed_publication_attempt(rfctobe: RfcToBe, detail: str):
                 f"failure for {rfctobe}"
             )
         else:
-            pub_attempt.status=PublicationAttempt.Status.FAILED
-            pub_attempt.detail=detail
+            pub_attempt.status = PublicationAttempt.Status.FAILED
+            pub_attempt.detail = detail
             pub_attempt.save()
 
 
