@@ -137,9 +137,12 @@ def begin_publication_attempt(rfctobe: RfcToBe) -> bool:
 
 
 def record_failed_publication_attempt(rfctobe: RfcToBe, detail: str):
-    attempts = PublicationAttempt.objects.select_for_update().filter(rfctobe=rfctobe)
     with transaction.atomic():
-        pub_attempt = attempts.first()
+        pub_attempt = (
+            PublicationAttempt.objects.select_for_update().filter(
+                rfc_to_be=rfctobe
+            ).first()
+        )
         if pub_attempt is None:
             logger.warning(
                 f"PublicationAttempt did not exist before recording failure "
@@ -152,7 +155,8 @@ def record_failed_publication_attempt(rfctobe: RfcToBe, detail: str):
                     detail=detail,
                 )
             except IntegrityError:
-                logger.error(
+                # log a warning and continue, we're giving up anyway...
+                logger.warning(
                     f"PublicationAttempt created by another process during execution "
                     f"of record_failed_publication_attempt() for {rfctobe}"
                 )
@@ -162,7 +166,9 @@ def record_failed_publication_attempt(rfctobe: RfcToBe, detail: str):
                 f"failure for {rfctobe}"
             )
         else:
-            attempts.update(status=PublicationAttempt.Status.FAILED, detail=detail)
+            pub_attempt.status=PublicationAttempt.Status.FAILED
+            pub_attempt.detail=detail
+            pub_attempt.save()
 
 
 def clear_failed_publication_attempt(rfctobe: RfcToBe):
