@@ -688,7 +688,7 @@ paths:
           description: ''
   /api/rpc/documents/{draft__name}/pub_status/:
     get:
-      operationId: pub_status
+      operationId: documents_pub_status
       parameters:
       - in: path
         name: draft__name
