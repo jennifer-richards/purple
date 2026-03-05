@@ -1,11 +1,13 @@
 # Copyright The IETF Trust 2025-2026, All Rights Reserved
+import logging
+
 import jsonschema.exceptions
 from django.test import TestCase
 
 from rpc.factories import RfcToBeFactory
 from rpc.models import PublicationAttempt, RfcToBe
 
-from .publication import begin_publication_attempt
+from .publication import begin_publication_attempt, record_failed_publication_attempt
 from .repo import Repository
 
 
@@ -54,7 +56,7 @@ class RepoTests(TestCase):
 
 
 class PublicationTests(TestCase):
-    def test_begin_publication(self):
+    def test_begin_publication_attempt(self):
         rfc_to_be = RfcToBeFactory()
         assert isinstance(rfc_to_be, RfcToBe)
         self.assertIsNone(
@@ -87,3 +89,34 @@ class PublicationTests(TestCase):
             rfc_to_be.publicationattempt.status,
             PublicationAttempt.Status.PENDING,
         )
+
+    def test_record_failed_publication_attempt(self):
+        logging.disable(logging.WARNING)  # squelch warnings
+        rfc_to_be = RfcToBeFactory()
+        assert isinstance(rfc_to_be, RfcToBe)
+
+        # normally we'd have a PENDING state already, but it should work even if
+        # not, so let's test that way - it's easier
+        record_failed_publication_attempt(rfc_to_be, "bad mojo")
+        self.assertEqual(
+            rfc_to_be.publicationattempt.status, PublicationAttempt.Status.FAILED
+        )
+        self.assertEqual(rfc_to_be.publicationattempt.detail, "bad mojo")
+
+        # it's now FAILED - updating again should not disturb that
+        record_failed_publication_attempt(rfc_to_be, "worse mojo")
+        self.assertEqual(
+            rfc_to_be.publicationattempt.status, PublicationAttempt.Status.FAILED
+        )
+        self.assertEqual(rfc_to_be.publicationattempt.detail, "bad mojo")
+
+        # and now try from PENDING
+        PublicationAttempt.objects.filter(rfc_to_be=rfc_to_be).update(
+            status=PublicationAttempt.Status.PENDING,
+            detail="",
+        )
+        record_failed_publication_attempt(rfc_to_be, "bad mojo")
+        self.assertEqual(
+            rfc_to_be.publicationattempt.status, PublicationAttempt.Status.FAILED
+        )
+        self.assertEqual(rfc_to_be.publicationattempt.detail, "bad mojo")
