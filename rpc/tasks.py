@@ -15,7 +15,7 @@ from .lifecycle.publication import (
 )
 from .lifecycle.repo import GithubRepository
 from .models import MailMessage, MetadataValidationResults, RfcToBe
-from .rfcindex import createRfcTxtIndex
+from .rfcindex import createRfcTxtIndex, createRfcXmlIndex
 
 logger = get_task_logger(__name__)
 
@@ -169,8 +169,13 @@ def process_rfctobe_changes_for_queue_task():
 
 
 @shared_task(bind=True)
-def create_index(self):
+def create_index_txt(self):
     createRfcTxtIndex()
+
+
+@shared_task(bind=True)
+def create_index_xml(self):
+    createRfcXmlIndex()
 
 
 @shared_task
