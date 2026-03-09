@@ -8,7 +8,7 @@ from ...models import RfcToBe
 
 
 class Command(BaseCommand):
-    help = "Push published RfcToBe author data to datatracker (dev only!)"
+    help = "Push published RfcToBe keyword data to datatracker (dev only!)"
 
     @with_rpcapi
     def handle(self, *args, rpcapi: rpcapi_client.PurpleApi, **options):
