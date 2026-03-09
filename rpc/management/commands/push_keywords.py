@@ -12,21 +12,11 @@ class Command(BaseCommand):
 
     @with_rpcapi
     def handle(self, *args, rpcapi: rpcapi_client.PurpleApi, **options):
-        for rfc_to_be in RfcToBe.objects.filter(disposition_id="published"):
+        for rfc_to_be in RfcToBe.objects.filter(
+            disposition_id="published"
+        ).exclude(keywords=""):
             patched = rpcapi_client.PatchedEditableRfcRequest(
-                authors=[
-                    rpcapi_client.RfcAuthorRequest(
-                        titlepage_name=author.titlepage_name,
-                        is_editor=author.is_editor,
-                        person=(
-                            author.datatracker_person.datatracker_id
-                            if author.datatracker_person is not None
-                            else None
-                        ),
-                        affiliation=author.affiliation or "",
-                    )
-                    for author in rfc_to_be.authors.all()
-                ],
+                keywords=[kw.strip() for kw in rfc_to_be.keywords.split(",")],
             )
             try:
                 rpcapi.purple_rfc_partial_update(
