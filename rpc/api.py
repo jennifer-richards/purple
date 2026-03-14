@@ -903,7 +903,7 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
         return Response()
 
     @extend_schema(
-        operation_id="documents_pub_status",
+        operation_id="documents_pub_status_retrieve",
         request=None,
         responses=PublishRfcStatusSerializer,
     )
@@ -921,6 +921,22 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
             else:
                 status = pub_attempt
         return Response(PublishRfcStatusSerializer(status).data)
+
+    @extend_schema(
+        operation_id="documents_pub_status_delete",
+        request=None,
+        responses={204: None},
+    )
+    @action(detail=True, methods=["get"], url_path="pub_status")
+    def pub_status(self, request, draft__name=None):
+        rfctobe = self.get_object()
+        try:
+            pub_attempt = rfctobe.publicationattempt
+        except RfcToBe.publicationattempt.RelatedObjectDoesNotExist:
+            pass
+        else:
+            pub_attempt.delete()
+        return Response(status=204)
 
     @extend_schema(
         operation_id="documents_sync_metadata",
