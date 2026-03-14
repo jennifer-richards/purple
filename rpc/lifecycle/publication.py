@@ -258,6 +258,11 @@ def clear_publication_attempt(rfctobe: RfcToBe):
     PublicationAttempt.objects.filter(rfc_to_be=rfctobe).delete()
 
 
+def clear_failed_publication_attempt(rfctobe: RfcToBe):
+    """Remove publication attempt record for an RfcToBe"""
+    PublicationAttempt.objects.filter(rfc_to_be=rfctobe, status="failed").delete()
+
+
 @with_rpcapi
 def publish_rfctobe(
     rfctobe: RfcToBe, expected_head: str, *, rpcapi: rpcapi_client.PurpleApi

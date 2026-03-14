@@ -49,6 +49,7 @@ from .lifecycle.metadata import Metadata, MetadataComparator
 from .lifecycle.publication import (
     begin_publication_attempt,
     can_publish,
+    clear_failed_publication_attempt,
     validate_ready_to_publish,
 )
 from .models import (
@@ -908,7 +909,7 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
         responses=PublishRfcStatusSerializer,
     )
     @action(detail=True, methods=["get"], url_path="pub_status")
-    def pub_status(self, request, draft__name=None):
+    def pub_status_retrieve(self, request, draft__name=None):
         StatusTuple = namedtuple("StatusTuple", "status detail")
         rfctobe = self.get_object()
         if rfctobe.disposition_id == "published":
@@ -923,19 +924,14 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
         return Response(PublishRfcStatusSerializer(status).data)
 
     @extend_schema(
-        operation_id="documents_pub_status_delete",
+        operation_id="documents_pub_status_clear_failed",
         request=None,
         responses={204: None},
     )
-    @action(detail=True, methods=["get"], url_path="pub_status")
-    def pub_status(self, request, draft__name=None):
+    @action(detail=True, methods=["delete"], url_path="pub_status_reset")
+    def pub_status_delete(self, request, draft__name=None):
         rfctobe = self.get_object()
-        try:
-            pub_attempt = rfctobe.publicationattempt
-        except RfcToBe.publicationattempt.RelatedObjectDoesNotExist:
-            pass
-        else:
-            pub_attempt.delete()
+        clear_failed_publication_attempt(rfctobe)
         return Response(status=204)
 
     @extend_schema(
