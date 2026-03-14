@@ -23,6 +23,7 @@ from datatracker.utils import build_datatracker_url
 from rpc.lifecycle.metadata import MetadataComparator
 
 from .models import (
+    ASSIGNMENT_INACTIVE_STATES,
     ActionHolder,
     AdditionalEmail,
     ApprovalLogMessage,
@@ -1030,6 +1031,7 @@ class ClusterMemberSerializer(serializers.Serializer):
     references = serializers.SerializerMethodField()
     is_received = serializers.SerializerMethodField()
     order = serializers.IntegerField()
+    is_blocked = serializers.SerializerMethodField()
 
     class Meta:
         model = ClusterMember
@@ -1062,6 +1064,24 @@ class ClusterMemberSerializer(serializers.Serializer):
         if rfctobe and rfctobe.disposition:
             return rfctobe.disposition.slug
         return None
+
+    def get_is_blocked(self, clustermember: ClusterMember) -> bool:
+        if hasattr(clustermember.doc, "rfctobe_annotated"):
+            rfctobes = clustermember.doc.rfctobe_annotated
+            rfctobe = rfctobes[0] if rfctobes else None
+        else:
+            rfctobe = clustermember.doc.rfctobe_set.exclude(
+                disposition__slug="withdrawn"
+            ).first()
+
+        if not rfctobe:
+            return False
+
+        return (
+            rfctobe.assignment_set.exclude(state__in=ASSIGNMENT_INACTIVE_STATES)
+            .filter(role__slug="blocked")
+            .exists()
+        )
 
     @extend_schema_field(RpcRelatedDocumentSerializer(many=True))
     @with_rpcapi
