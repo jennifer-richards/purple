@@ -177,6 +177,17 @@
           </div>
         </template>
       </template>
+      <template v-else-if="step.type === 'publicationFailed'">
+        <div class="text-center mb-3 max-w-sm m-auto">
+          <span class="font-bold mr-1">Publication failed:</span> <span class="font-mono">{{ step.errorText }}</span>
+        </div>
+        <div class="text-center">
+          <BaseButton btn-type="outline"
+            @click="resetAfterFailedPublication()">
+            Acknowledge
+          </BaseButton>
+        </div>
+      </template>
       <template v-else-if="step.type === 'rfcPosted'">
         <template v-if="step.error">
           <div class="text-center">
@@ -246,6 +257,7 @@ type Step =
   | { type: 'rfcPosted', error?: string }
   | { type: 'alreadyPublished' }
   | { type: 'publicationPending' }
+  | { type: 'publicationFailed', errorText: string }
 
 const step = ref<Step>({ type: 'loading' })
 
@@ -271,7 +283,7 @@ const { data: metadataValidationResults, error: metadataValidationResultsError, 
 
 const { data: publicationStatus, error: publicationStatusError, status: publicationStatusStatus, refresh: publicationStatusRefresh } = await useAsyncData(
   () => `draft-${draftName.value}-publication-status`,
-  () => api.documentsPubStatus({
+  () => api.documentsPubStatusRetrieve({
     draftName: draftName.value,
   }),
   {
@@ -327,12 +339,11 @@ watch([rfcToBe, rfcToBeStatus, metadataValidationResultsStatus, publicationStatu
         setTimeout(publicationStatusRefresh, PUBLICATION_STATUS_POLL_INTERVAL_MS)
         return
       case 'failed':
-        snackbar.add({
-          type: 'error',
-          title: 'Publication failed',
-          text: publicationStatus.value.detail,
-        })
-        break
+        step.value = {
+          type: 'publicationFailed',
+          errorText: publicationStatus.value.detail,
+        }
+        return
       case 'published':
         step.value = { type: 'rfcPosted' }
         return
@@ -513,6 +524,13 @@ const publishRfc = async () => {
       error: `Problem publishing: ${e}`
     }
   }
+}
+
+const resetAfterFailedPublication = async () => {
+  if (draftName.value) {
+    await api.documentsPubStatusClearFailed({ draftName: draftName.value })
+  }
+  publicationStatusRefresh()
 }
 
 const metadataValidationResultsSyncHandler = async () => {
