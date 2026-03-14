@@ -577,8 +577,8 @@ class ClusterQuerySet(models.QuerySet):
         return self.prefetch_related(
             Prefetch(
                 "clustermember_set",
-                queryset=ClusterMember.objects.exclude(
-                    doc__rfctobe__disposition__slug="withdrawn"
+                queryset=ClusterMember.objects.filter(
+                    doc__rfctobe__disposition__slug="in_progress"
                 )
                 .select_related("doc")
                 .prefetch_related(
@@ -609,14 +609,14 @@ class ClusterQuerySet(models.QuerySet):
 
     def with_is_active_annotated(self):
         """Annotate clusters with is_active status
-        A cluster is considered active if at least one of its documents is not in
-        terminal state (published/withdrawn).
+        A cluster is considered active if at least one of its documents is in_progress.
         """
         return self.annotate(
             is_active_annotated=Exists(
-                ClusterMember.objects.filter(cluster=OuterRef("pk"))
-                .exclude(doc__rfctobe__disposition__slug="published")
-                .exclude(doc__rfctobe__disposition__slug="withdrawn")
+                RfcToBe.objects.filter(
+                    draft__clustermember__cluster=OuterRef("pk"),
+                    disposition__slug="in_progress",
+                )
             )
         )
 
