@@ -29,6 +29,14 @@
           </div>
         </div>
       </template>
+      <template v-else-if="step.type === 'publicationPending'">
+        <div class="text-center">
+          <span class="font-bold mr-1">Publication in progress...</span>
+          <div class="mx-auto w-[3.5em] h-[3.5em] mb-3 bg-white rounded-md">
+            <Icon name="ei:spinner-3" size="3.5em" class="animate-spin" />
+          </div>
+        </div>
+      </template>
       <template v-else-if="step.type === 'error'">
         <div class="text-center mb-3 max-w-sm m-auto">
           <span class="font-bold mr-1">Error:</span> <span class="font-mono">{{ step.errorText }}</span>
@@ -169,6 +177,17 @@
           </div>
         </template>
       </template>
+      <template v-else-if="step.type === 'publicationFailed'">
+        <div class="text-center mb-3 max-w-sm m-auto">
+          <span class="font-bold mr-1">Publication failed:</span> <span class="font-mono">{{ step.errorText }}</span>
+        </div>
+        <div class="text-center">
+          <BaseButton btn-type="outline"
+            @click="resetAfterFailedPublication()">
+            Acknowledge
+          </BaseButton>
+        </div>
+      </template>
       <template v-else-if="step.type === 'rfcPosted'">
         <template v-if="step.error">
           <div class="text-center">
@@ -222,6 +241,8 @@ const draftName = computed(() => route.params.id?.toString() ?? '')
 
 const diffColumns = { nameColumn: "Name", leftColumn: "Database", rightColumn: "Document" }
 
+const PUBLICATION_STATUS_POLL_INTERVAL_MS = 2000
+
 type Step =
   | { type: 'getMetadataValidationResults' }
   | { type: 'fetchAndVerifyAndMetadataButton' }
@@ -235,6 +256,8 @@ type Step =
   | { type: 'databaseUpdated', error?: string }
   | { type: 'rfcPosted', error?: string }
   | { type: 'alreadyPublished' }
+  | { type: 'publicationPending' }
+  | { type: 'publicationFailed', errorText: string }
 
 const step = ref<Step>({ type: 'loading' })
 
@@ -258,16 +281,29 @@ const { data: metadataValidationResults, error: metadataValidationResultsError, 
   }
 )
 
+const { data: publicationStatus, error: publicationStatusError, status: publicationStatusStatus, refresh: publicationStatusRefresh } = await useAsyncData(
+  () => `draft-${draftName.value}-publication-status`,
+  () => api.documentsPubStatusRetrieve({
+    draftName: draftName.value,
+  }),
+  {
+    server: false,
+    lazy: true,
+  }
+)
+
 const isMetadataValidationResults = (data: unknown): data is MetadataValidationResults => {
   return !!data && !Array.isArray(data) && typeof data === 'object' && 'isError' in data && 'isMatch' in data
 }
 
-watch([rfcToBe, rfcToBeStatus, metadataValidationResultsStatus], () => {
+watch([rfcToBe, rfcToBeStatus, metadataValidationResultsStatus, publicationStatusStatus], () => {
   if (
     rfcToBeStatus.value === 'pending' ||
     metadataValidationResultsStatus.value === 'pending' ||
+    publicationStatusStatus.value === 'pending' ||
     rfcToBeStatus.value === 'idle' ||
-    metadataValidationResultsStatus.value === 'idle'
+    metadataValidationResultsStatus.value === 'idle' ||
+    publicationStatusStatus.value === 'idle'
   ) {
     return
   }
@@ -287,6 +323,33 @@ watch([rfcToBe, rfcToBeStatus, metadataValidationResultsStatus], () => {
       showResyncButton: true
     }
     return
+  }
+  if (publicationStatusStatus.value === 'error') {
+    snackbar.add({
+      type: 'warning',
+      title: 'Error retrieving publication status',
+      text: '',
+    })
+  }
+  if (publicationStatus.value) {
+    switch (publicationStatus.value.status) {
+      case 'pending':
+        // already pending, cut to the chase
+        step.value = { type: 'publicationPending' }
+        setTimeout(publicationStatusRefresh, PUBLICATION_STATUS_POLL_INTERVAL_MS)
+        return
+      case 'failed':
+        step.value = {
+          type: 'publicationFailed',
+          errorText: publicationStatus.value.detail,
+        }
+        return
+      case 'published':
+        step.value = { type: 'rfcPosted' }
+        return
+      case 'none':
+        break
+    }
   }
   if (metadataValidationResultsStatus.value === 'error') {
     // could be a 404 meaning there were no precomputed validation results, ie not an error
@@ -452,14 +515,22 @@ const publishRfc = async () => {
     })
     // if it got this far it was successful
     step.value = {
-      type: 'rfcPosted'
+      type: 'publicationPending'
     }
+    setTimeout(publicationStatusRefresh, PUBLICATION_STATUS_POLL_INTERVAL_MS)
   } catch (e: unknown) {
     step.value = {
       type: 'rfcPosted',
       error: `Problem publishing: ${e}`
     }
   }
+}
+
+const resetAfterFailedPublication = async () => {
+  if (draftName.value) {
+    await api.documentsPubStatusClearFailed({ draftName: draftName.value })
+  }
+  publicationStatusRefresh()
 }
 
 const metadataValidationResultsSyncHandler = async () => {
