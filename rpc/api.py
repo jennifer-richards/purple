@@ -509,6 +509,7 @@ def import_submission(request, document_id, rpcapi: rpcapi_client.PurpleApi):
                 author_serializer = CreateRfcAuthorSerializer(
                     data={
                         "titlepage_name": author.plain_name,
+                        "affiliation": author.affiliation,
                     }
                 )
                 if author_serializer.is_valid():
