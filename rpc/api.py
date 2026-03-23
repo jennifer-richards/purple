@@ -10,7 +10,8 @@ import django_filters
 import rpcapi_client
 from django import forms
 from django.db import transaction
-from django.db.models import Max, Prefetch, Q
+from django.db.models import F, Max, Prefetch, Q, Subquery, Value
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
@@ -148,6 +149,79 @@ def get_rfctobe_for_draft_name(draft_name: str) -> RfcToBe:
     if obj is None:
         raise NotFound(f"No RfcToBe found for draft '{draft_name}'")
     return obj
+
+
+def _add_doc_to_cluster(cluster: Cluster, doc: Document) -> None:
+    if ClusterMember.objects.filter(doc=doc).exists():
+        return
+
+    annotated_clusters = Cluster.objects.annotate(
+        next_order=Max("clustermember__order", default=0) + Value(1)
+    )
+
+    doc.clustermember_set.create(
+        cluster=cluster,
+        order=Subquery(
+            annotated_clusters.filter(pk=cluster.pk).values_list("next_order")
+        ),
+    )
+
+
+def apply_submission_cluster_membership(
+    *,
+    current_doc: Document,
+    reference_docs: list[Document],
+    received_reference_ids: set[int],
+) -> Cluster | None:
+    """Place imported document into an existing reference cluster or create a new one.
+
+    If any received reference is already clustered, the current document joins that
+    cluster. Otherwise, create a new cluster and add the current document and all
+    reference documents that are not already clustered. If there are no references,
+    do not create a cluster.
+    """
+
+    if not reference_docs and not received_reference_ids:
+        return None
+
+    existing_member = (
+        ClusterMember.objects.filter(doc__datatracker_id__in=received_reference_ids)
+        .select_related("cluster")
+        .first()
+    )
+    if existing_member is not None:
+        _add_doc_to_cluster(existing_member.cluster, current_doc)
+        return existing_member.cluster
+
+    docs_by_id = {current_doc.id: current_doc}
+    for reference_doc in reference_docs:
+        docs_by_id.setdefault(reference_doc.id, reference_doc)
+
+    clustered_doc_ids = set(
+        ClusterMember.objects.filter(doc_id__in=docs_by_id).values_list(
+            "doc_id", flat=True
+        )
+    )
+    docs_to_add = [
+        doc for doc_id, doc in docs_by_id.items() if doc_id not in clustered_doc_ids
+    ]
+    if not docs_to_add:
+        return None
+
+    next_number = Coalesce(
+        Subquery(
+            Cluster.objects.order_by("-number")
+            .annotate(next_num=F("number") + Value(1))
+            .values("next_num")[:1]
+        ),
+        Value(1),
+    )
+    cluster = Cluster.objects.create(number=next_number)
+
+    for doc in docs_to_add:
+        _add_doc_to_cluster(cluster, doc)
+
+    return cluster
 
 
 @extend_schema(operation_id="version", responses=VersionInfoSerializer)
@@ -456,11 +530,14 @@ def import_submission(request, document_id, rpcapi: rpcapi_client.PurpleApi):
             # Get ref list from Datatracker
             references = rpcapi.get_draft_references(document_id)
             # Filter out I-Ds that already have an RfcToBe
+            reference_ids = [s.id for s in references]
             existing_rfc_to_be = dict(
                 RfcToBe.objects.filter(
-                    draft__datatracker_id__in=[s.id for s in references]
+                    draft__datatracker_id__in=reference_ids
                 ).values_list("draft__datatracker_id", "disposition__slug")
             )
+            reference_docs: list[Document] = []
+            received_reference_ids: set[int] = set()
             for reference in references:
                 # Create a RelatedDoc for each normative reference
                 if reference.id not in existing_rfc_to_be:
@@ -486,18 +563,37 @@ def import_submission(request, document_id, rpcapi: rpcapi_client.PurpleApi):
                             },
                         )
                     create_rpc_related_document("not-received", rfctobe.pk, draft.name)
+                    reference_docs.append(draft)
                 else:
                     disposition = existing_rfc_to_be[reference.id]
                     if disposition in ("created", "in_progress"):
                         create_rpc_related_document(
                             "refqueue", rfctobe.pk, reference.name
                         )
+                        received_reference_ids.add(reference.id)
                     elif disposition == "withdrawn":
                         create_rpc_related_document(
                             "withdrawnref", rfctobe.pk, reference.name
                         )
                     else:
                         pass  # ignoring references to already published RfcToBe
+
+                    try:
+                        reference_doc = Document.objects.get(
+                            datatracker_id=reference.id
+                        )
+                    except Document.DoesNotExist as err:
+                        raise APIException(
+                            "Data inconsistency: expected a Document row for "
+                            f"reference id {reference.id}"
+                        ) from err
+                    reference_docs.append(reference_doc)
+
+            apply_submission_cluster_membership(
+                current_doc=rfctobe.draft,
+                reference_docs=reference_docs,
+                received_reference_ids=received_reference_ids,
+            )
 
             # create the authors
             if draft_info is None:
@@ -712,14 +808,7 @@ class ClusterViewSet(
                 code="document_already_in_cluster",
             )
 
-        max_order = (
-            ClusterMember.objects.filter(cluster=cluster).aggregate(Max("order"))[
-                "order__max"
-            ]
-            or 1
-        )
-
-        ClusterMember.objects.create(cluster=cluster, doc=doc, order=max_order + 1)
+        _add_doc_to_cluster(cluster, doc)
 
         cluster.refresh_from_db()
 
