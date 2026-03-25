@@ -9,13 +9,50 @@
             New Document Reference
           </DialogTitle>
 
-          <DialogDropdown v-model="relationship" placeholder="Select..." label="Relationship" id="relationship" :options="options" />
-          <DialogFieldText v-model="targetDraftName" label="Target draftName" id="targetDraftName" />
+          <DialogFieldText
+            v-model="searchQuery"
+            label="Search target draft"
+            id="targetDraftSearch"
+          />
+
+          <p class="mt-2 text-xs text-gray-500">Enter at least {{ MIN_SEARCH_LENGTH }} characters.</p>
+
+          <div v-if="searchQuery.trim().length >= MIN_SEARCH_LENGTH" class="mt-3 max-h-48 overflow-y-auto rounded-md border border-gray-200">
+            <div v-if="searchLoading" class="px-3 py-2 text-sm text-gray-500">Searching...</div>
+            <ul v-else-if="searchMatches.length" class="divide-y divide-gray-100">
+              <li v-for="doc in searchMatches" :key="doc.id">
+                <button
+                  type="button"
+                  class="w-full px-3 py-2 text-left hover:bg-gray-50"
+                  @click="selectResult(doc.name)"
+                >
+                  <div class="text-sm font-medium text-gray-900">{{ doc.name }}</div>
+                  <div v-if="doc.title" class="truncate text-xs text-gray-600">{{ doc.title }}</div>
+                </button>
+              </li>
+            </ul>
+            <div v-if="!searchLoading && !hasExactDraftMatch" class="p-2">
+              <button
+                type="button"
+                class="w-full rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-left text-sm text-amber-800 hover:bg-amber-100"
+                @click="selectNotReceived()"
+              >
+                Enter draft as not-received: {{ searchQuery.trim() }}
+              </button>
+            </div>
+          </div>
+
+          <p v-if="selectedResultName" class="mt-3 text-sm text-gray-700">
+            Selected {{ selectedResultName }}. This will be added as refqueue.
+          </p>
+          <p v-else-if="useNotReceived" class="mt-3 text-sm text-gray-700">
+            Selected {{ searchQuery.trim() }}. This will be added as not-received.
+          </p>
 
           <div class="mt-[25px] flex justify-end">
-            <BaseButton btn-type="default" @click="addDependencyItem"
+            <BaseButton btn-type="default" :disabled="!canSubmit" @click="addDependencyItem"
               class="text-sm hover:bg-green5 inline-flex h-[35px] items-center justify-center rounded-lg px-[15px] font-semibold leading-none focus:shadow-[0_0_0_2px] focus:outline-none">
-              Add
+              {{ submitButtonLabel }}
             </BaseButton>
           </div>
           <DialogClose
@@ -38,8 +75,8 @@ import {
   DialogRoot,
   DialogTitle,
 } from "reka-ui"
+import { refDebounced } from "@vueuse/core"
 import type { DocumentsRelatedCreateRequest, RpcRelatedDocument } from "~/purple_client"
-import type { DialogOption } from "~/utils/dialog"
 import { snackbarForErrors } from "~/utils/snackbar"
 
 const relatedDocuments = defineModel<RpcRelatedDocument[]>('relatedDocuments', { required: true, default: [] })
@@ -53,14 +90,115 @@ type Props = {
 
 const props = defineProps<Props>()
 
-const relationship = ref<string>("")
-const targetDraftName = ref<string>("")
+const api = useApi()
+
+const MIN_SEARCH_LENGTH = 3
+
+const searchQuery = ref("")
+const searchLoading = ref(false)
+const searchResults = ref<any>()
+const selectedResultName = ref("")
+const useNotReceived = ref(false)
 
 const snackbar = useSnackbar()
 
-const api = useApi()
+const searchMatches = computed(() => {
+  if (Array.isArray(searchResults.value)) return searchResults.value
+  if (Array.isArray(searchResults.value?.results)) return searchResults.value.results
+  return []
+})
+
+const hasExactDraftMatch = computed(() => {
+  const trimmed = searchQuery.value.trim()
+  if (!trimmed) return false
+  return searchMatches.value.some((result) => result.name === trimmed)
+})
+
+const resetFormState = () => {
+  searchQuery.value = ""
+  selectedResultName.value = ""
+  useNotReceived.value = false
+  searchResults.value = undefined
+  searchLoading.value = false
+  if (previousAbortController) {
+    previousAbortController.abort()
+    previousAbortController = undefined
+  }
+}
+
+const debouncedSearch = refDebounced(searchQuery, 250)
+let previousAbortController: AbortController | undefined
+
+watch(isOpenDependencyModal, (isOpen) => {
+  if (!isOpen) {
+    resetFormState()
+  }
+})
+
+watch(debouncedSearch, async (q) => {
+  if (previousAbortController) {
+    previousAbortController.abort()
+    previousAbortController = undefined
+  }
+
+  selectedResultName.value = ""
+  useNotReceived.value = false
+
+  const trimmed = q.trim()
+  if (trimmed.length < MIN_SEARCH_LENGTH) {
+    searchResults.value = undefined
+    return
+  }
+
+  previousAbortController = new AbortController()
+  searchLoading.value = true
+  try {
+    searchResults.value = await api.documentsSearch(
+      { q: trimmed, disposition: "in_progress" },
+      { signal: previousAbortController.signal }
+    )
+  } catch {
+    // Ignore aborted and transient search failures.
+  } finally {
+    previousAbortController = undefined
+    searchLoading.value = false
+  }
+})
+
+const relationship = computed(() => {
+  if (selectedResultName.value) return "refqueue"
+  if (useNotReceived.value) return "not-received"
+  return ""
+})
+
+const targetDraftName = computed(() => {
+  if (selectedResultName.value) return selectedResultName.value
+  if (useNotReceived.value) return searchQuery.value.trim()
+  return ""
+})
+
+const canSubmit = computed(() => Boolean(relationship.value && targetDraftName.value))
+
+const submitButtonLabel = computed(() => {
+  if (relationship.value === "refqueue") return "Add as refqueue"
+  if (relationship.value === "not-received") return "Add as not-received"
+  return "Select relation option"
+})
+
+const selectResult = (name: string) => {
+  selectedResultName.value = name
+  useNotReceived.value = false
+}
+
+const selectNotReceived = () => {
+  if (searchQuery.value.trim().length < MIN_SEARCH_LENGTH) return
+  selectedResultName.value = ""
+  useNotReceived.value = true
+}
 
 const addDependencyItem = async () => {
+  if (!canSubmit.value) return
+
   const createArg: DocumentsRelatedCreateRequest = {
     draftName: props.draftName,
     createRpcRelatedDocumentRequest: {
@@ -72,10 +210,12 @@ const addDependencyItem = async () => {
   try {
     const newRpcRelatedDocument = await api.documentsRelatedCreate(createArg)
     relatedDocuments.value = [...relatedDocuments.value, newRpcRelatedDocument]
-    // reset form
+    snackbar.add({
+      type: 'success',
+      title: 'Document reference added',
+      text: ''
+    })
     isOpenDependencyModal.value = false
-    relationship.value = ''
-    targetDraftName.value = ''
   } catch (e: unknown) {
     snackbarForErrors({
       snackbar,
@@ -83,31 +223,6 @@ const addDependencyItem = async () => {
       error: e
     })
   }
-}
-
-const {
-  data: relationshipNamesList,
-  error: errorRelationshipNamesList
-} = await useAsyncData(
-  () => api.docRelationshipNamesList({ refs: true }),
-  {server: false, lazy: true}
-)
-
-const options = computed((): DialogOption[] => {
-  if (!relationshipNamesList.value) return []
-  return relationshipNamesList.value.map(item => ({
-    label: item.name,
-    value: item.slug,
-    description: item.desc
-  }))
-})
-
-if(errorRelationshipNamesList.value) {
-  snackbarForErrors({
-    snackbar,
-    defaultTitle: `Unable to retrieve relationship names list`,
-    error: errorRelationshipNamesList.value
-  })
 }
 
 </script>
