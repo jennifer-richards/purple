@@ -18,6 +18,7 @@ export const orange = "#fd7e14"
 export const cyan = "#0dcaf0"
 export const yellow = "#ffc107"
 export const red = "#ee828d"
+export const pink = '#bb44bb'
 export const teal = "#20c997"
 export const white = "#fff"
 export const black = "#212529"
@@ -104,6 +105,170 @@ export const parseRelationship = (maybeRelationship: string): Relationship => {
   return 'not-received'
 }
 
+type CircleTheme = {
+  fill: string
+  textColor: string,
+  strokeWidth: number
+  strokeStyle: 'solid' | 'dotted',
+  text: Line[],
+  tooltip?: string[]
+}
+
+// code partially adapted from
+// https://observablehq.com/@mbostock/fit-text-to-circle
+const wordsToLines = (words: string[]): Line[] => {
+  const lines: Line[] = []
+
+  let line_width_0 = Infinity
+
+  const firstWord = words[0]
+
+  if (!firstWord) {
+    return []
+  }
+
+  let line: Line = {
+    text: firstWord,
+    width: line_width_0,
+  }
+
+  const target_width = Math.sqrt(measureWidth(words.join('').trim()) * line_height)
+  for (let i = 0, n = words.length; i < n; ++i) {
+    let line_text = `${(line.text ? `${line.text}` : '')}${words[i]}`
+    let line_width = measureWidth(line_text) * 1.2
+    if ((line_width_0 + line_width) / 2 < target_width) {
+      line.width = line_width_0 = line_width
+      line.text = line_text
+    } else {
+      line_width_0 = measureWidth(words[i] ?? '')
+      line = { width: line_width_0, text: words[i] ?? '' }
+      lines.push(line)
+    }
+  }
+  return lines
+}
+
+function measureWidth(text: string): number {
+  const context = document.createElement("canvas").getContext("2d")
+
+  if (!context) {
+    console.error({ context })
+    throw Error("Unable to get canvas context. See console for more")
+  }
+  context.font = font
+  return context.measureText(text).width
+}
+
+const splitDraftNameIntoWords = (id: string): string[] => {
+  return id.split(/-/g).map((part, index) => `${index > 0 ? '-' : ''}${part}`)
+}
+
+const makeTooltip = (node: NodeParam): string[] | undefined => {
+  const tooltip: string[] = []
+  if (node.isReceived) {
+    tooltip.push('Received.')
+  } else if(node.isReceived === false) {
+    tooltip.push('Not received.')
+  }
+  if (node.disposition) {
+    if (node.disposition === 'published') {
+      tooltip.push('Published.')
+    } else {
+      tooltip.push(`Disposition: ${startCase(node.disposition)}.`)
+    }
+  }
+  if (node.isBlocked) {
+    tooltip.push('Blocked.')
+  }
+  return tooltip.length > 0 ? tooltip : undefined
+}
+
+/**
+ * based on https://docs.google.com/spreadsheets/d/1WoPNZiFf9Hx4Qc6N5UE1-RKhYYNybBeCYZM72wL5TSM/edit?gid=0#gid=0
+ */
+export const getCircleTheme = (node: NodeParam): CircleTheme => {
+  if (Boolean(node.isReceived) && Boolean(node.isNormRef) && !Boolean(node.hasNormRef) && !Boolean(node.isBlocked) && node.disposition === 'in_progress') {
+    return {
+      fill: blue,
+      textColor: black,
+      strokeWidth: 2,
+      strokeStyle: 'solid',
+      text: wordsToLines([...splitDraftNameIntoWords(node.id)]),
+      tooltip: makeTooltip(node)
+    }
+  }
+  if (Boolean(node.isReceived) && Boolean(node.hasNormRef) && Boolean(node.hasNormRefInQueue) && !Boolean(node.hasNormRefBlocked) && !Boolean(node.isBlocked) && node.disposition === 'in_progress') {
+    return {
+      fill: green,
+      textColor: black,
+      strokeWidth: 2,
+      strokeStyle: 'solid',
+      text: wordsToLines([...splitDraftNameIntoWords(node.id)]),
+      tooltip: makeTooltip(node)
+    }
+  }
+  if (Boolean(node.isReceived) && Boolean(node.isNormRef) && !Boolean(node.hasNormRef) && Boolean(node.isBlocked)) {
+    return {
+      fill: pink,
+      textColor: black,
+      strokeWidth: 2,
+      strokeStyle: 'solid',
+      text: wordsToLines([...splitDraftNameIntoWords(node.id)]),
+      tooltip: makeTooltip(node)
+    }
+  }
+  if (Boolean(node.isReceived) && Boolean(node.hasNormRef) && Boolean(node.hasNormRefInQueue) && Boolean(node.hasNormRefBlocked) && Boolean(node.isBlocked)) {
+    return {
+      fill: pink,
+      textColor: black,
+      strokeWidth: 2,
+      strokeStyle: 'solid',
+      text: wordsToLines([...splitDraftNameIntoWords(node.id)]),
+      tooltip: makeTooltip(node)
+    }
+  }
+  if (Boolean(node.isReceived) && Boolean(node.hasNormRef) && !Boolean(node.hasNormRefInQueue) && Boolean(node.isBlocked) && node.rfcNumber === undefined) {
+    return {
+      fill: pink,
+      textColor: black,
+      strokeWidth: 1,
+      strokeStyle: 'dotted',
+      text: wordsToLines([...splitDraftNameIntoWords(node.id)]),
+      tooltip: makeTooltip(node)
+    }
+  }
+  if (!Boolean(node.isReceived) && Boolean(node.isNormRef) && (Boolean(node.hasNormRefBlocked) || Boolean(node.isBlocked) )) {
+    return {
+      fill: orange,
+      textColor: black,
+      strokeWidth: 1,
+      strokeStyle: 'dotted',
+      text: wordsToLines([...splitDraftNameIntoWords(node.id)]),
+      tooltip: makeTooltip(node)
+    }
+  }
+
+  if (Boolean(node.isReceived) && !Boolean(node.hasNormRefInQueue) && (!Boolean(node.hasNormRefBlocked) || !Boolean(node.isBlocked)) && node.disposition === 'published') {
+    return {
+      fill: gray200,
+      textColor: black,
+      strokeWidth: 2,
+      strokeStyle: 'solid',
+      text: wordsToLines([...splitDraftNameIntoWords(node.id)]),
+      tooltip: makeTooltip(node)
+    }
+  }
+
+  return {
+    fill: black,
+    textColor: white,
+    strokeWidth: 2,
+    strokeStyle: 'solid',
+    text: wordsToLines([...splitDraftNameIntoWords(node.id)]),
+    tooltip: makeTooltip(node)
+  }
+}
+
 export type Line = {
   text: string
   width: number
@@ -134,6 +299,10 @@ export type NodeParam = {
   url?: string
   isReceived?: boolean
   isBlocked?: boolean
+  isNormRef?: boolean
+  hasNormRef?: boolean
+  hasNormRefBlocked?: boolean
+  hasNormRefInQueue?: boolean
   disposition: Disposition
   rfcNumber?: number | undefined,
   rfcToBe?: RfcToBe

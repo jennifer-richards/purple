@@ -26,70 +26,6 @@ const getLinkColor = (rel: Relationship) => {
 
 const DEFAULT_STROKE = 10
 
-// code partially adapted from
-// https://observablehq.com/@mbostock/fit-text-to-circle
-
-type LinesProps = { id?: string, rfcNumber?: number }
-function lines({ id, rfcNumber }: LinesProps): Line[] {
-  const lines: Line[] = []
-  if (rfcNumber) {
-    const newRfcNumber = `RFC-to-be ${rfcNumber}`
-    lines.push({
-      text: newRfcNumber,
-      width: newRfcNumber.length,
-      style: 'font-weight: bold'
-    })
-  }
-  let line_width_0 = Infinity
-  if (!id) return lines;
-
-  let text = id
-  let line: Line = {
-    text,
-    width: line_width_0,
-  }
-
-
-  let sep = "-"
-  let words = text.trim().split(/-/g)
-  if (words.length == 1) {
-    words = text.trim().split(/\s/g)
-    sep = " "
-  }
-  words = words.map((x, i, a) => (i < a.length - 1 ? x + sep : x))
-  if (words.length == 1) {
-    words = text
-      .trim()
-      .split(/rfc/g)
-      .map((x, i, a) => (i < a.length - 1 ? x + "RFC" : x))
-  }
-  const target_width = Math.sqrt(measureWidth(text.trim()) * line_height)
-  for (let i = 0, n = words.length; i < n; ++i) {
-    let line_text = (line ? line.text : "") + words[i]
-    let line_width = measureWidth(line_text) * 1.2
-    if ((line_width_0 + line_width) / 2 < target_width) {
-      line.width = line_width_0 = line_width
-      line.text = line_text
-    } else {
-      line_width_0 = measureWidth(words[i] ?? '') * 1.2
-      line = { width: line_width_0, text: words[i] ?? '' }
-      lines.push(line)
-    }
-  }
-  return lines
-}
-
-function measureWidth(text: string): number {
-  const context = document.createElement("canvas").getContext("2d")
-
-  if (!context) {
-    console.error({ context })
-    throw Error("Unable to get canvas context. See console for more")
-  }
-  context.font = font
-  return context.measureText(text).width
-}
-
 function textRadius(lines: Line[]) {
   let radius = 0
   for (let i = 0, n = lines.length; i < n; ++i) {
@@ -184,18 +120,13 @@ export function drawGraph({ data, pushRouter, colorMode, setTooltip }: Props) {
         console.error("Expected element but received ", target)
         return
       }
-      const titleElement = target.closest('[title]')
-      if (!titleElement) {
-        console.error("Couldn't find title element of ", target, { parents: getAncestors(target) })
+      const group = target.closest('g')
+      if (!(group instanceof SVGElement)) {
+        console.error("Expected svg element but received ", group, ' from ', target)
         return
       }
-      const boundingClientRect = titleElement.getBoundingClientRect()
+      const boundingClientRect = group.getBoundingClientRect()
 
-      const title = titleElement.getAttribute('title')
-      if (!title) {
-        console.warn("couldn't find title attribute for tooltip")
-        return
-      }
       setTooltip({
         text: getLinkTitle(d),
         position: [boundingClientRect.left + window.scrollX, boundingClientRect.top + window.scrollY - TOOLTIP_BUFFER_Y]
@@ -220,7 +151,7 @@ export function drawGraph({ data, pushRouter, colorMode, setTooltip }: Props) {
     .attr("href", (d) => d.url ??
       '#' // we need a href (eg '#') to be focusable even if it doesn't have a d.url so that the `title` is available
     )
-    .attr("title", (d) => getNodeTitle(d).join(" "))
+    .attr("title", (d) => getCircleTheme(d).tooltip?.join(" ") ?? null)
     .on("focus mouseover", function (e, d) {
       e.preventDefault()
       const { target } = e
@@ -228,22 +159,26 @@ export function drawGraph({ data, pushRouter, colorMode, setTooltip }: Props) {
         console.error("Expected element but received ", target)
         return
       }
-      const titleElement = target.closest('[title]')
-      if (!titleElement) {
-        console.error("Couldn't find title attribute in parents of ", target, { parents: getAncestors(target) })
-        return
-      }
-      const boundingClientRect = titleElement.getBoundingClientRect()
 
-      const title = titleElement.getAttribute('title')
-      if (!title) {
-        console.warn("couldn't find title attribute for tooltip")
+      const anchor = target.closest('a')
+      if (!(anchor instanceof SVGElement || anchor instanceof HTMLElement)) {
+        console.error("Expected svg element but received ", anchor, ' from ', target)
         return
       }
-      setTooltip({
-        text: getNodeTitle(d),
-        position: [boundingClientRect.left + window.scrollX, boundingClientRect.top + window.scrollY - TOOLTIP_BUFFER_Y]
-      })
+      const boundingClientRect = anchor.getBoundingClientRect()
+
+      const { tooltip } = getCircleTheme(d)
+
+      if (tooltip) {
+        console.log("has tooltip", tooltip)
+        setTooltip({
+          text: tooltip,
+          position: [boundingClientRect.left + window.scrollX, boundingClientRect.top + window.scrollY - TOOLTIP_BUFFER_Y]
+        })
+      } else {
+        console.log("hide tooltip?")
+        setTooltip()
+      }
     })
     .on('blur mouseout', () => {
       setTooltip()
@@ -274,14 +209,9 @@ export function drawGraph({ data, pushRouter, colorMode, setTooltip }: Props) {
     })
 
   a.append("text")
-    .attr("fill", (d) => black)
+    .attr("fill", (d) => getCircleTheme(d).textColor)
     .each((d) => {
-      (d as Node).lines = d.disposition === 'published' ? lines({
-        rfcNumber: d.rfcNumber ?? d.rfcToBe?.rfcNumber ?? undefined,
-      }) : lines({
-        rfcNumber: d.rfcNumber ?? d.rfcToBe?.rfcNumber ?? undefined,
-        id: d.id,
-      });
+      (d as Node).lines = getCircleTheme(d).text;
       (d as Node).r = textRadius((d as Node).lines!)
       max_r = Math.max((d as Node).r, max_r)
     })
@@ -299,33 +229,10 @@ export function drawGraph({ data, pushRouter, colorMode, setTooltip }: Props) {
     .attr("stroke", black)
     .lower()
     .attr("fill", (d) => {
-      if (d.disposition === 'published') {
-        return blue
-      }
-      if (d.isBlocked) {
-        return red
-      }
-      if (!d.isReceived) {
-        return orange
-      }
-      return green
+      return getCircleTheme(d).fill
     })
     .each((d) => {
-      switch (d.disposition) {
-        case 'created':
-          (d as Node).stroke = 3
-          break
-        case 'published':
-          (d as Node).stroke = 1
-          break
-        case 'in_progress':
-          (d as Node).stroke = 6
-          break
-        case 'withdrawn':
-          (d as Node).stroke = 0
-        default:
-          (d as Node).stroke = 4
-      }
+      (d as Node).stroke = getCircleTheme(d).strokeWidth
     })
     .attr("r", (d) => {
       const dNode = d as Node
@@ -344,10 +251,14 @@ export function drawGraph({ data, pushRouter, colorMode, setTooltip }: Props) {
       return dNode.stroke
     })
     .attr("stroke-dasharray", (d) => {
-      if (!d.isReceived) {
-        return 4
+      const { strokeStyle } = getCircleTheme(d)
+      switch(strokeStyle) {
+        case 'dotted':
+          return 4
+        case 'solid':
+          return 0
       }
-      return 0
+      assertNever(strokeStyle)
     })
 
   const adjust = DEFAULT_STROKE / 2
@@ -495,13 +406,6 @@ export function drawGraph({ data, pushRouter, colorMode, setTooltip }: Props) {
       .stop()
       .on("tick", ticked),
   ]
-}
-
-const getNodeTitle = (d: NodeParam): string[] => {
-  return [
-    d.isReceived ? 'Received' : 'Not received',
-    d.disposition ? `Disposition: ${startCase(d.disposition)}` : 'No disposition',
-  ].filter(line => typeof line === 'string')
 }
 
 const getLinkTitle = (d: LinkParam): string[] => {
