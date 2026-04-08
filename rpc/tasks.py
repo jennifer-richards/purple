@@ -17,6 +17,21 @@ from .lifecycle.repo import GithubRepository
 from .models import MailMessage, MetadataValidationResults, RfcToBe
 from .rfcindex import refresh_rfc_index
 
+
+@shared_task
+def set_stream_manager_task(rfc_to_be_id: int):
+    """Resolve and persist the stream_manager FK for a RfcToBe."""
+    try:
+        rfctobe = RfcToBe.objects.get(pk=rfc_to_be_id)
+    except RfcToBe.DoesNotExist:
+        logger.warning("set_stream_manager_task: RfcToBe pk=%s not found", rfc_to_be_id)
+        return
+    if rfctobe.stream_manager_id is not None:
+        return
+    person = rfctobe.resolve_stream_manager_person()
+    RfcToBe.objects.filter(pk=rfc_to_be_id).update(stream_manager=person)
+
+
 logger = get_task_logger(__name__)
 
 

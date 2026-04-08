@@ -1,5 +1,7 @@
 # Copyright The IETF Trust 2024, All Rights Reserved
 
+from dataclasses import dataclass
+
 import requests
 from django.conf import settings
 
@@ -12,10 +14,16 @@ class NoSuchSlug(Exception):
     pass
 
 
+REQUEST_TIMEOUT = 10  # seconds
+
+
 def datatracker_name(namemodel: str, slug: str) -> tuple[str, str, str]:
     try:
         response = requests.get(
-            f"{settings.DATATRACKER_API_V1_BASE}/name/{namemodel}?fmt=json&slug={slug}"
+            f"{settings.DATATRACKER_API_V1_BASE}/name/{namemodel}?fmt=json&slug={slug}",
+            allow_redirects=True,
+            stream=True,
+            timeout=REQUEST_TIMEOUT,
         )
     except requests.exceptions.ConnectionError as err:
         raise DatatrackerFetchFailure from err
@@ -48,6 +56,9 @@ def datatracker_group_list_email(acronym: str) -> str | None:
         response = requests.get(
             f"{settings.DATATRACKER_API_V1_BASE}/group/group/",
             params={"acronym": acronym, "fmt": "json"},
+            allow_redirects=True,
+            stream=True,
+            timeout=REQUEST_TIMEOUT,
         )
     except requests.exceptions.ConnectionError:
         return None
@@ -58,3 +69,57 @@ def datatracker_group_list_email(acronym: str) -> str | None:
     if not objects:
         return None
     return objects[0].get("list_email") or None
+
+
+@dataclass
+class GroupChair:
+    datatracker_person_id: int | None
+    email: str
+    name: str
+
+
+def datatracker_group_chair(group_acronym: str) -> "GroupChair | None":
+    """Return datatracker_person_id, email and name of the chair of a group, or None
+    if not found."""
+    try:
+        response = requests.get(
+            f"{settings.DATATRACKER_API_V1_BASE}/group/role/",
+            params={
+                "name__slug": "chair",
+                "group__acronym": group_acronym,
+                "format": "json",
+            },
+            allow_redirects=True,
+            stream=True,
+            timeout=REQUEST_TIMEOUT,
+        )
+    except requests.exceptions.ConnectionError:
+        return None
+    if not response.ok:
+        return None
+    objects = response.json().get("objects", [])
+    if not objects:
+        return None
+    role = objects[0]
+    email = role.get("email", "")
+    person_url = role.get("person", "")
+    name = ""
+    if person_url:
+        try:
+            person_response = requests.get(
+                f"{settings.DATATRACKER_BASE}{person_url}",
+                params={"format": "json"},
+                allow_redirects=True,
+                stream=True,
+                timeout=REQUEST_TIMEOUT,
+            )
+            if person_response.ok:
+                name = person_response.json().get("plain_name") or ""
+        except requests.exceptions.ConnectionError:
+            pass
+    person_id = role.get("person", "").rstrip("/").rsplit("/", 1)[-1]
+    try:
+        person_id_int = int(person_id)
+    except (ValueError, TypeError):
+        person_id_int = 0
+    return GroupChair(datatracker_person_id=person_id_int, email=email, name=name)
