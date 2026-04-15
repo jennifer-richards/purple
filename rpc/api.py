@@ -83,6 +83,7 @@ from .models import (
     UnusableRfcNumber,
 )
 from .pagination import DefaultLimitOffsetPagination
+from .rfcindex import mark_rfcindex_as_dirty
 from .serializers import (
     ActionHolderSerializer,
     AdditionalEmailSerializer,
@@ -1147,6 +1148,7 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
                 f"Failed to sync metadata with datatracker: {err}"
             ) from err
 
+        mark_rfcindex_as_dirty()
         return Response()
 
     @extend_schema(
@@ -1590,6 +1592,14 @@ class UnusableRfcNumberViewSet(viewsets.ModelViewSet):
             )
 
         return super().partial_update(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        mark_rfcindex_as_dirty()
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        mark_rfcindex_as_dirty()
 
 
 @extend_schema(

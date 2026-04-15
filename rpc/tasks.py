@@ -3,6 +3,7 @@ import rpcapi_client
 from celery import shared_task
 from celery.utils.log import get_task_logger
 from django.db.models import F
+from django.utils import timezone
 
 from datatracker.models import Document
 from datatracker.rpcapi import with_rpcapi
@@ -24,7 +25,7 @@ from .models import (
     RfcToBe,
     RpcRelatedDocument,
 )
-from .rfcindex import refresh_rfc_index
+from .rfcindex import mark_rfcindex_as_processed, refresh_rfc_index, rfcindex_is_dirty
 from .utils import get_or_create_draft_by_name
 
 
@@ -193,7 +194,13 @@ def process_rfctobe_changes_for_queue_task():
 
 @shared_task
 def refresh_rfc_index_task():
-    refresh_rfc_index()
+    if rfcindex_is_dirty():
+        logger.info("RFC index data has updates, refreshing")
+        new_processed_time = timezone.now()
+        refresh_rfc_index()
+        mark_rfcindex_as_processed(new_processed_time)
+    else:
+        logger.debug("RFC index not updated, skipping")
 
 
 @shared_task

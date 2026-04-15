@@ -25,6 +25,7 @@ from datatracker.utils.publication import publish_rfc_metadata, upload_rfc_conte
 from rpc.models import PublicationAttempt, RfcToBe
 from rpcauth.models import User
 
+from ..rfcindex import mark_rfcindex_as_dirty
 from .repo import GithubRepository, RepositoryError, TemporaryRepositoryError
 
 logger = logging.getLogger(__name__)
@@ -388,6 +389,8 @@ def publish_rfctobe(
                 f"was published, but uploading its files failed. Manual correction "
                 f"is required."
             ) from err
+        else:
+            mark_rfcindex_as_dirty()
 
 
 class PublicationError(Exception):
