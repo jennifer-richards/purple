@@ -12,20 +12,13 @@ pip3 --disable-pip-version-check --no-cache-dir install --user --no-warn-script-
 # specify celery location
 CELERY=/home/dev/.local/bin/celery
 
+# Bare call to trap seems to help TERM signals exit during sleep
+trap
+
 # Wait for DB container
 echo "Waiting for DB container to come online..."
 /usr/local/bin/wait-for db:5432 -- echo "PostgreSQL ready"
 
-# Prepare to run celery
-cleanup () {
-  # Cleanly terminate the celery app by sending it a TERM, then waiting for it to exit.
-  if [[ -n "${celery_pid}" ]]; then
-    echo "Gracefully terminating celery worker."
-    kill -TERM "${celery_pid}"
-    wait "${celery_pid}"
-  fi
-}
-trap 'trap "" TERM; cleanup' TERM
 echo "Starting celery worker with beat scheduler..."
 watchmedo auto-restart \
           --patterns '*.py' \
