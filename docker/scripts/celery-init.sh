@@ -19,6 +19,16 @@ trap
 echo "Waiting for DB container to come online..."
 /usr/local/bin/wait-for db:5432 -- echo "PostgreSQL ready"
 
+# Prepare to run celery
+cleanup () {
+  # Cleanly terminate the celery app by sending it a TERM, then waiting for it to exit.
+  if [[ -n "${celery_pid}" ]]; then
+    echo "Gracefully terminating celery worker."
+    kill -TERM "${celery_pid}"
+    wait "${celery_pid}"
+  fi
+}
+trap 'trap "" TERM; cleanup' TERM
 echo "Starting celery worker with beat scheduler..."
 watchmedo auto-restart \
           --patterns '*.py' \
