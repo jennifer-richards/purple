@@ -1861,7 +1861,11 @@ paths:
                 $ref: '#/components/schemas/MetadataValidationResults'
           description: ''
     delete:
-      operationId: documents_metadata_validation_results_destroy
+      operationId: metadata_validation_results_delete
+      description: |-
+        Delete metadata validation results for a given RfcToBe, identified by head_sha.
+        Pass the sentinel value "no_head_sha" to delete a record whose head_sha is NULL
+        (i.e. the validation task failed before a git commit was fetched).
       parameters:
       - in: path
         name: draft_name
@@ -1872,7 +1876,7 @@ paths:
         name: head_sha
         schema:
           type: string
-          description: Head SHA of the commit that was validated
+        description: Head SHA of the git commit the validation was run against
         required: true
       tags:
       - purple
@@ -1881,6 +1885,18 @@ paths:
       responses:
         '204':
           description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteMetadataBadRequestResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteMetadataNotFoundResponse'
+          description: ''
   /api/rpc/documents/{draft_name}/metadata_validation_results/sync/:
     post:
       operationId: metadata_validation_results_sync
@@ -4008,6 +4024,20 @@ components:
           type: integer
       required:
       - person_id
+    DeleteMetadataBadRequestResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    DeleteMetadataNotFoundResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
     DocumentComment:
       type: object
       description: Serialize a comment on an RfcToBe
@@ -4358,9 +4388,7 @@ components:
           readOnly: true
         head_sha:
           type: string
-          nullable: true
-          description: Head SHA of the commit that was validated
-          maxLength: 40
+          readOnly: true
         can_autofix:
           type: boolean
           readOnly: true
