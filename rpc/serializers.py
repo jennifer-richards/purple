@@ -18,7 +18,7 @@ from simple_history.models import ModelDelta
 from simple_history.utils import update_change_reason
 
 from datatracker.models import DatatrackerPerson, Document
-from datatracker.rpcapi import with_rpcapi
+from datatracker.rpcapi import datatracker_api, with_rpcapi
 from datatracker.utils import build_datatracker_url
 from rpc.lifecycle.metadata import MetadataComparator
 
@@ -1281,9 +1281,10 @@ class ClusterMemberSerializer(serializers.Serializer):
 
         if not rfctobe:
             # if the doc is not received, get references on-the-fly from dt
-            api_references = rpcapi.get_draft_references(
-                clustermember.doc.datatracker_id
-            )
+            with datatracker_api():
+                api_references = rpcapi.get_draft_references(
+                    clustermember.doc.datatracker_id
+                )
             if not api_references:
                 return None
 

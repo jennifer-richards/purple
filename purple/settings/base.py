@@ -78,6 +78,7 @@ OIDC_RP_SIGN_ALGO = "RS256"
 OIDC_RP_SCOPES = "openid profile roles"
 OIDC_STORE_ID_TOKEN = True  # store id_token in session (used for RP-initiated logout)
 ALLOW_LOGOUT_GET_METHOD = True  # for now anyway
+OIDC_TIMEOUT = 10  # seconds
 OIDC_OP_LOGOUT_URL_METHOD = "rpcauth.utils.op_logout_url"
 
 # How often to renew tokens? Default is 15 minutes. Needs SessionRefresh middleware.
@@ -194,6 +195,7 @@ CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 CELERY_BEAT_SYNC_EVERY = 1  # update DB after every event
 # Window after after a missed deadline before abandoning a cron task
 CELERY_BEAT_CRON_STARTING_DEADLINE = 1800  # seconds
+CELERY_BEAT_SCHEDULE = {}
 
 TRIGGER_QUEUE_PRECOMPUTE_URL = os.environ.get("PURPLE_TRIGGER_QUEUE_PRECOMPUTE_URL")
 

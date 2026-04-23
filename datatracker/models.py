@@ -1,10 +1,11 @@
 # Copyright The IETF Trust 2023-2025, All Rights Reserved
 import rpcapi_client
+import urllib3.exceptions
 from django.core.cache import cache
 from django.db import models
 from simple_history.models import HistoricalRecords
 
-from .rpcapi import with_rpcapi
+from .rpcapi import DataTrackerUnavailable, with_rpcapi
 from .utils import build_datatracker_url
 
 
@@ -82,6 +83,13 @@ class DatatrackerPerson(models.Model):
                 person = rpcapi.get_person_by_id(int(self.datatracker_id))
             except rpcapi_client.exceptions.NotFoundException:
                 cached_value = None
+            except (
+                urllib3.exceptions.MaxRetryError,
+                urllib3.exceptions.NewConnectionError,
+                rpcapi_client.exceptions.ApiException,
+            ) as exc:
+                # DT unavailable — raise so callers can surface the error
+                raise DataTrackerUnavailable() from exc
             else:
                 cached_value = person.json()
             cache.set(cache_key, cached_value)
@@ -159,6 +167,12 @@ class Document(models.Model):
                 document = rpcapi.get_draft_by_id(int(self.datatracker_id))
             except rpcapi_client.exceptions.NotFoundException:
                 cached_value = None
+            except (
+                urllib3.exceptions.MaxRetryError,
+                urllib3.exceptions.NewConnectionError,
+                rpcapi_client.exceptions.ApiException,
+            ) as exc:
+                raise DataTrackerUnavailable() from exc
             else:
                 cached_value = document.json()
             cache.set(cache_key, cached_value)
