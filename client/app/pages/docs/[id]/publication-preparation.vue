@@ -230,7 +230,7 @@ import { TooltipContent, TooltipPortal, TooltipProvider, TooltipRoot, TooltipTri
 import { useAsyncData } from '#app'
 import { DateTime } from 'luxon'
 import BaseButton from '~/components/BaseButton.vue'
-import type { MetadataValidationResults } from '~/purple_client'
+import { ResponseError, type MetadataValidationResults } from '~/purple_client'
 import { type DocTabId } from '~/utils/doc'
 
 const route = useRoute()
@@ -502,10 +502,16 @@ const publishRfc = async () => {
     }
     setTimeout(publicationStatusRefresh, PUBLICATION_STATUS_POLL_INTERVAL_MS)
   } catch (e: unknown) {
-    step.value = {
-      type: 'rfcPosted',
-      error: `Problem publishing: ${e}`
+    let errorText = `${e}`
+    if (e instanceof ResponseError) {
+      try {
+        const body = await e.response.json()
+        const msg = body.detail ?? Object.values(body)[0]
+        if (msg) errorText = String(msg)
+      } catch { /* keep default */ }
     }
+    snackbar.add({ type: 'error', title: 'Cannot publish', text: errorText })
+    step.value = { type: 'rfcPosted', error: errorText }
   }
 }
 
