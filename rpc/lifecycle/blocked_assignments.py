@@ -170,63 +170,52 @@ def _has_active_blocked_assignment(rfc: RfcToBe) -> bool:
     return blocked_qs.exists()
 
 
-def _create_blocked_assignments(rfc: RfcToBe, reasons: set[str]) -> bool:
+def _create_blocked_assignments(rfc: RfcToBe, reasons: set[str] | None = None) -> bool:
     """Create new 'blocked' assignments and store blocking reasons."""
 
     logger.info("Creating blocked assignment for rfc %s, reasons: %s", rfc.pk, reasons)
 
     active_assignment_qs = rfc.assignment_set.exclude(role__slug="blocked").active()
     try:
+        for reason_slug in reasons or []:
+            RfcToBeBlockingReason.objects.create(
+                rfc_to_be=rfc,
+                reason_id=reason_slug,
+                comment="",
+            )
+
         role = RpcRole.objects.get(slug="blocked")
+        comment = (
+            f"blocked because of blocking condition(s): {', '.join(reasons)}; "
+            if reasons
+            else ""
+        )
 
         if active_assignment_qs.exists():
             logger.info(
                 "Setting active assignments to closed_for_hold for rfc %s", rfc.pk
             )
             for assignment in active_assignment_qs:
-                # Close the current assignment
                 assignment.state = Assignment.State.CLOSED_FOR_HOLD
                 assignment.comment = "Closed due to blocked state"
                 assignment.save(update_fields=["state", "comment"])
 
-                comment = (
-                    f"blocked because of blocking condition(s): {', '.join(reasons)}; "
-                )
                 Assignment.objects.update_or_create(
                     rfc_to_be=rfc,
                     role=role,
                     person=assignment.person,
                     state=Assignment.State.IN_PROGRESS,
-                    defaults={
-                        "comment": comment,
-                    },
+                    defaults={"comment": comment},
                 )
 
         else:
             logger.info("Creating new blocked assignment for rfc %s", rfc.pk)
-            comment = (
-                f"blocked because of blocking condition(s): {', '.join(reasons)}; "
-            )
             Assignment.objects.create(
                 rfc_to_be=rfc,
                 role=role,
                 state=Assignment.State.IN_PROGRESS,
                 comment=comment,
             )
-
-        # Store blocking reasons in RfcToBeBlockingReason
-        for reason_slug in reasons:
-            try:
-                reason_model = BlockingReason.objects.get(slug=reason_slug)
-                RfcToBeBlockingReason.objects.create(
-                    rfc_to_be=rfc,
-                    reason=reason_model,
-                )
-            except BlockingReason.DoesNotExist as err:
-                logger.exception(
-                    "Invalid blocking reason slug '%s' for rfc %s", reason_slug, rfc.pk
-                )
-                raise NotFound(f"Invalid blocking reason slug: {reason_slug}") from err
 
     except Exception as err:
         logger.exception(
@@ -288,10 +277,14 @@ def _close_blocked_assignments(rfc: RfcToBe) -> bool:
                     },
                 )
 
-    # Resolve all active blocking reasons
-    RfcToBeBlockingReason.objects.filter(rfc_to_be=rfc, resolved__isnull=True).update(
-        resolved=timezone.now()
-    )
+    # Resolve all active blocking reasons except manual_hold, which only the
+    # explicit API action may clear.
+    now = timezone.now()
+    for reason in RfcToBeBlockingReason.objects.filter(
+        rfc_to_be=rfc, resolved__isnull=True
+    ).exclude(reason__slug=BlockingReason.MANUAL_HOLD):
+        reason.resolved = now
+        reason.save(update_fields=["resolved"])
 
     return True
 
@@ -326,6 +319,18 @@ def apply_blocked_assignment_for_rfc(rfc: RfcToBe) -> bool:
                 logger.info("Created blocked assignment for rfc %s", locked.pk)
                 return True
             elif not blocked_now and blocked_before:
+                has_manual_hold = RfcToBeBlockingReason.objects.filter(
+                    rfc_to_be=locked,
+                    reason_id=BlockingReason.MANUAL_HOLD,
+                    resolved__isnull=True,
+                ).exists()
+                if has_manual_hold:
+                    logger.info(
+                        "Automatic block cleared for rfc %s but manual hold active, "
+                        "leaving blocked assignment in place",
+                        locked.pk,
+                    )
+                    return False
                 logger.info("Closing blocked assignment for rfc %s", locked.pk)
                 _close_blocked_assignments(locked)
                 return True
@@ -336,3 +341,70 @@ def apply_blocked_assignment_for_rfc(rfc: RfcToBe) -> bool:
             "Failed to apply blocked assignment for rfc %s", getattr(rfc, "pk", None)
         )
         raise RuntimeError("Failed to apply blocked assignment") from err
+
+
+def apply_manual_block(rfc: RfcToBe, comment: str = "") -> None:
+    """Store a manual hold reason and create a blocked assignment if needed.
+
+    If the RFC is not yet blocked: closes active assignments to CLOSED_FOR_HOLD
+    and creates a new blocked assignment. If already blocked (e.g. an automatic
+    block is active), only the reason record is added — no assignment changes.
+    """
+    try:
+        with transaction.atomic():
+            locked = RfcToBe.objects.select_for_update().get(pk=rfc.pk)
+            RfcToBeBlockingReason.objects.create(
+                rfc_to_be=locked, reason_id=BlockingReason.MANUAL_HOLD, comment=comment
+            )
+            if _has_active_blocked_assignment(locked):
+                logger.info(
+                    "RFC %s already blocked; skip assignment creation for manual hold",
+                    locked.pk,
+                )
+                return
+            # if not already blocked, create blocked assignment
+            # don't pass reasons since the current block reason is being added above
+            _create_blocked_assignments(locked)
+            logger.info("Created manual-hold blocked assignment for rfc %s", locked.pk)
+    except Exception as err:
+        logger.exception(
+            "Failed to apply manual block for rfc %s", getattr(rfc, "pk", None)
+        )
+        raise RuntimeError("Failed to apply manual block") from err
+
+
+def apply_manual_unblock(rfc: RfcToBe) -> None:
+    """Resolve the manual hold reason and restore assignments if no other blocks remain.
+
+    Marks the blocked assignment done and re-creates any CLOSED_FOR_HOLD assignments —
+    but only if no other blocking reasons remain after the hold is removed.
+    """
+    try:
+        with transaction.atomic():
+            locked = RfcToBe.objects.select_for_update().get(pk=rfc.pk)
+            now = timezone.now()
+            for reason in RfcToBeBlockingReason.objects.filter(
+                rfc_to_be=locked,
+                reason__slug=BlockingReason.MANUAL_HOLD,
+                resolved__isnull=True,
+            ):
+                reason.resolved = now
+                reason.save(update_fields=["resolved"])
+            remaining_reasons = get_block_reasons(locked)
+            if not remaining_reasons and _has_active_blocked_assignment(locked):
+                _close_blocked_assignments(locked)
+                logger.info(
+                    "Closed manual-hold blocked assignment for rfc %s", locked.pk
+                )
+            else:
+                logger.info(
+                    "Manual hold cleared for rfc %s but still blocked (%s), "
+                    "leaving assignments unchanged",
+                    locked.pk,
+                    list(remaining_reasons),
+                )
+    except Exception as err:
+        logger.exception(
+            "Failed to apply manual unblock for rfc %s", getattr(rfc, "pk", None)
+        )
+        raise RuntimeError("Failed to apply manual unblock") from err

@@ -48,6 +48,10 @@ from datatracker.rpcapi import datatracker_api, with_rpcapi
 from utils.rest_framework.permissions import HasApiKey
 
 from .dt_v1_api_utils import datatracker_group_list_email
+from .lifecycle.blocked_assignments import (
+    apply_manual_block,
+    apply_manual_unblock,
+)
 from .lifecycle.metadata import Metadata, MetadataComparator
 from .lifecycle.publication import (
     begin_publication_attempt,
@@ -1180,6 +1184,31 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
     def pub_status_delete(self, request, draft__name=None):
         rfctobe = self.get_object()
         clear_failed_publication_attempt(rfctobe)
+        return Response(status=204)
+
+    @extend_schema(
+        methods=["post"],
+        operation_id="documents_manual_block",
+        request=inline_serializer(
+            "ManualBlockRequest",
+            fields={"comment": serializers.CharField(required=False, default="")},
+        ),
+        responses={204: None},
+    )
+    @extend_schema(
+        methods=["delete"],
+        operation_id="documents_manual_unblock",
+        request=None,
+        responses={204: None},
+    )
+    @action(detail=True, methods=["post", "delete"], url_path="manual_block")
+    def manual_block(self, request, draft__name=None):
+        rfctobe = self.get_object()
+        if request.method == "POST":
+            comment = request.data.get("comment", "")
+            apply_manual_block(rfctobe, comment=comment)
+        else:
+            apply_manual_unblock(rfctobe)
         return Response(status=204)
 
     @extend_schema(
