@@ -5,8 +5,7 @@
         <a
           :href="person.email ? datatrackerLinks.personByEmail(person.email) : undefined"
           :class="ANCHOR_STYLE"
-        >{{ person.name }}</a>
-        <span v-if="person.email" class="text-gray-500 ml-1">({{ person.email }})</span>
+        >{{ person.name }}<span v-if="person.email" :class="PERSON_ID_STYLE">({{ person.email }})</span></a>
       </span>
       <span v-else class="flex-1">(none)</span>
       <div v-if="!isReadOnly" class="flex gap-1">
@@ -38,6 +37,9 @@
           <ComboboxContent
             class="absolute z-10 w-full mt-1 min-w-[160px] bg-white overflow-hidden rounded-lg shadow-sm border shadow-xl"
           >
+            <div v-if="searchResults" class="px-3 py-1 text-xs text-gray-400 border-b border-gray-100">
+              up to 10 results — type to narrow
+            </div>
             <ComboboxViewport class="p-[5px]">
               <ComboboxEmpty class="text-mauve8 text-xs font-medium text-center py-2">
                 (no matches)
@@ -47,10 +49,16 @@
                 v-for="result in searchResults.results"
                 :key="result.personId"
                 :value="result"
-                class="text-xs leading-none rounded-[3px] flex items-center h-[25px] pr-[35px] pl-[25px] relative select-none data-[highlighted]:outline-none data-[highlighted]:bg-gray-100 data-[highlighted]:text-black"
+                class="text-xs rounded-[3px] flex flex-col px-3 py-1.5 relative select-none cursor-default data-[highlighted]:outline-none data-[highlighted]:bg-gray-100 data-[highlighted]:text-black"
               >
-                <span class="font-bold">{{ result.name }}</span>
-                <span class="font-normal ml-1" v-if="result.personId">#{{ result.personId }}</span>
+                <span class="font-semibold">{{ result.name }}</span>
+                <a
+                  v-if="result.email"
+                  :href="datatrackerLinks.personByEmail(result.email)"
+                  target="_blank"
+                  class="text-gray-400 hover:underline mt-0.5"
+                  @click.stop
+                >{{ result.email }}</a>
               </ComboboxItem>
             </ComboboxViewport>
           </ComboboxContent>
@@ -80,7 +88,7 @@ import {
   ComboboxViewport,
 } from "reka-ui"
 import type { BaseDatatrackerPerson } from '~/purple_client'
-import { ANCHOR_STYLE } from '~/utils/html'
+import { ANCHOR_STYLE, PERSON_ID_STYLE } from '~/utils/html'
 import { classForBtnType } from '~/utils/button'
 import { useDatatrackerLinks } from '~/composables/useDatatrackerLinks'
 
