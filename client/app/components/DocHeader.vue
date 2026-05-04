@@ -35,7 +35,7 @@
             </span>
           </BaseButton>
           <BaseButton @click="openAssignmentFinishedModal" class="flex items-center">
-            <span>Finish assignments</span>
+            <span>Manage Assignments</span>
             <span v-if="isLoadingFinishAssignmentsModal" class="w-3">
               <Icon name="ei:spinner-3" size="1rem" class="animate-spin" />
             </span>
@@ -58,6 +58,7 @@ type Props = {
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{ assignmentsChanged: [] }>()
 
 const overlayModal = inject(overlayModalKey)
 const isAprilFirst = computed(() => props.rfcToBe?.isAprilFirstRfc === true)
@@ -113,9 +114,8 @@ const openAssignmentFinishedModal = async () => {
         assignments: rfcToBeAssignments,
         people: rpcPersonList,
         rfcToBe: props.rfcToBe,
-        onSuccess: () => { }
+        onSuccess: () => emit('assignmentsChanged')
       },
-      mode: 'side',
     }).catch(e => {
       if (e === undefined) {
         // ignore... it's just signalling that the modal has closed
