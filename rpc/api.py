@@ -136,7 +136,6 @@ from .serializers import (
     SubseriesTypeNameSerializer,
     UnusableRfcNumberSerializer,
     VersionInfoSerializer,
-    check_user_has_role,
 )
 from .tasks import (
     RPC_PERSON_NAME_MAP_CACHE_KEY,
@@ -1015,24 +1014,6 @@ class AssignmentViewSet(viewsets.ModelViewSet):
     filter_backends = (filters.DjangoFilterBackend, drf_filters.OrderingFilter)
     ordering_fields = ["id"]
     ordering = ["-id"]
-
-    def get_queryset(self):
-        user = self.request.user
-
-        base_queryset = super().get_queryset()
-
-        is_manager = check_user_has_role(user, "manager")
-        if user.is_superuser or is_manager:
-            return base_queryset
-
-        # Non-superusers/managers should only see their own assignments
-        # more granular permission to be added later
-        rpcperson = user.rpcperson() if hasattr(user, "rpcperson") else None
-        if rpcperson is None:
-            raise PermissionDenied("Unauthorized request")
-
-        # Filter assignments for the logged-in RpcPerson
-        return base_queryset.filter(person=rpcperson)
 
 
 class RfcToBeQueryParamsForm(forms.Form):
