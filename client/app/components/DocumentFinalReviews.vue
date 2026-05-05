@@ -135,7 +135,7 @@ const columns = [
       if (!date) {
         return '(N/A)'
       }
-      const dateTime = DateTime.fromJSDate(date)
+      const dateTime = DateTime.fromJSDate(date, { zone: 'utc' })
       return h('time', { datetime: dateTime.toString() }, dateTime.toLocaleString(
         DateTime.DATE_MED_WITH_WEEKDAY
       ))
@@ -158,13 +158,13 @@ const columns = [
   }),
   columnHelper.accessor(
     'approved', {
-    header: 'Date Approved / (N/A)',
+    header: 'Date Approved',
     cell: data => {
       const date = data.getValue()
       if (!date) {
         return '(N/A)'
       }
-      const dateTime = DateTime.fromJSDate(date)
+      const dateTime = DateTime.fromJSDate(date, { zone: 'utc' })
       return h('time', { datetime: dateTime.toString() }, dateTime.toLocaleString(
         DateTime.DATE_MED_WITH_WEEKDAY
       ))
