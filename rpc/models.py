@@ -261,9 +261,15 @@ class RfcToBe(models.Model):
     keywords = models.CharField(
         max_length=1000, blank=True, help_text="Comma-separated list of keywords"
     )
-
+    # Note: as used, only the date components of external_deadline / internal_goal are
+    # significant. The time component is customarily set to 12:00 UTC.
     external_deadline = models.DateTimeField(null=True, blank=True)
     internal_goal = models.DateTimeField(null=True, blank=True)
+
+    # publishedAt is in general a full datetime. For RFCs published before purple, it
+    # is the timestamp estimated by datatracker when it became aware that the RFC had
+    # been published via its sync with the RFC index. For later RFCs, it is an accurate
+    # timestamp indicating when the RFC was published.
     published_at = models.DateTimeField(null=True, blank=True)
 
     # Labels applied to this instance. To track history, see
@@ -892,6 +898,8 @@ class FinalApproval(models.Model):
         blank=True,
         related_name="overriding_approver_set",
     )
+    # Note: as used, only the date components of requested / approved are significant.
+    # The time component is customarily set to 12:00 UTC.
     requested = models.DateTimeField(default=timezone.now)
     approved = models.DateTimeField(null=True, blank=True)
     comment = models.TextField(blank=True)
@@ -949,6 +957,8 @@ class ActionHolder(models.Model):
     )
     body = models.CharField(max_length=64, blank=True, default="")
     since_when = models.DateTimeField(default=timezone.now)
+    # Note: as used, only the date components of completed / deadline are significant.
+    # The time component is customarily set to 12:00 UTC.
     completed = models.DateTimeField(null=True, blank=True)
     deadline = models.DateTimeField(null=True, blank=True)
     comment = models.TextField(blank=True)
