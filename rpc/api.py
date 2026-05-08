@@ -108,8 +108,10 @@ from .serializers import (
     CreateRfcAuthorSerializer,
     CreateRfcToBeSerializer,
     CreateRpcRelatedDocumentSerializer,
+    DocumentAssignmentSerializer,
     DocumentCommentSerializer,
     FinalApprovalSerializer,
+    HistorySerializer,
     LabelSerializer,
     MailMessageSerializer,
     MailResponseSerializer,
@@ -124,7 +126,6 @@ from .serializers import (
     QueueCountsSerializer,
     QueueItemSerializer,
     RfcAuthorSerializer,
-    RfcToBeHistorySerializer,
     RfcToBeSerializer,
     RpcPersonSerializer,
     RpcRelatedDocumentSerializer,
@@ -138,6 +139,7 @@ from .serializers import (
     SubseriesTypeNameSerializer,
     UnusableRfcNumberSerializer,
     VersionInfoSerializer,
+    collect_rfctobe_history,
 )
 from .tasks import (
     RPC_PERSON_NAME_MAP_CACHE_KEY,
@@ -1089,6 +1091,22 @@ class ClusterViewSet(
         return Response(serializer.data)
 
 
+@extend_schema_with_draft_name()
+class DocumentAssignmentViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    """Assignments for a specific document, including per-assignment history"""
+
+    serializer_class = DocumentAssignmentSerializer
+
+    def get_queryset(self):
+        return (
+            Assignment.objects.filter(
+                rfc_to_be=resolve_rfctobe(self.kwargs["draft_name"])
+            )
+            .select_related("person__datatracker_person", "role")
+            .order_by("-id")
+        )
+
+
 class AssignmentViewSet(viewsets.ModelViewSet):
     queryset = Assignment.objects.all()
     serializer_class = AssignmentSerializer
@@ -1190,12 +1208,12 @@ class RfcToBeViewSet(viewsets.ModelViewSet):
             raise serializers.ValidationError(form.errors)
         return queryset
 
-    @extend_schema(responses=RfcToBeHistorySerializer(many=True))
+    @extend_schema(responses=HistorySerializer(many=True))
     @action(detail=True, pagination_class=None, filter_backends=[])
     def history(self, request, draft__name=None):
         rfc_to_be = self.get_object()
-        serializer = RfcToBeHistorySerializer(rfc_to_be.history, many=True)
-        return Response(serializer.data)
+        records = collect_rfctobe_history(rfc_to_be)
+        return Response([HistorySerializer(r).data for r in records])
 
     @extend_schema(
         operation_id="documents_publish",
