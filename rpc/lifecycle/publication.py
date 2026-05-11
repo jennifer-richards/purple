@@ -246,12 +246,12 @@ def record_failed_publication_attempt(rfctobe: RfcToBe, detail: str):
                     f"PublicationAttempt created by another process during execution "
                     f"of record_failed_publication_attempt() for {rfctobe}"
                 )
-        elif pub_attempt.status != PublicationAttempt.Status.PENDING:
-            logger.warning(
-                f"PublicationAttempt status was {pub_attempt.status} when recording "
-                f"failure for {rfctobe}"
-            )
         else:
+            if pub_attempt.status != PublicationAttempt.Status.PENDING:
+                logger.warning(
+                    f"PublicationAttempt status was {pub_attempt.status} when "
+                    f"recording failure for {rfctobe}. Detail was: {pub_attempt.detail}"
+                )
             pub_attempt.status = PublicationAttempt.Status.FAILED
             pub_attempt.detail = detail
             pub_attempt.save()
@@ -271,26 +271,42 @@ def clear_failed_publication_attempt(rfctobe: RfcToBe):
 def publish_rfctobe(
     rfctobe: RfcToBe, expected_head: str, *, rpcapi: rpcapi_client.PurpleApi
 ):
+    was_in_progress_before = rfctobe.disposition_id == "in_progress"
+    _do_publish_rfctobe(rfctobe, expected_head=expected_head, rpcapi=rpcapi)
+    # Submit to crossref only if disposition changed to published as part of this
+    # publication attempt. If the disposition was already published before, do
+    # not submit again.
+    if was_in_progress_before and rfctobe.disposition_id == "published":
+        from rpc.tasks import crossref_submission_task
+
+        crossref_submission_task.delay(rfctobe_id=rfctobe.id)
+
+
+def _do_publish_rfctobe(
+    rfctobe: RfcToBe, expected_head: str, *, rpcapi: rpcapi_client.PurpleApi
+):
     # Re-validate that the RfcToBe is ready to publish, things may have changed
     # since the task was queued.
     try:
         validate_ready_to_publish(rfctobe)
     except serializers.ValidationError as err:
         first = next(iter(err.detail.values()), None)
-        msg = str(first) if first is not None else str(err.detail)
-        raise PublicationError(f"Cannot publish because {msg}") from err
+        msg = (
+            f"Cannot publish because "
+            f"{str(first) if first is not None else str(err.detail)}"
+        )
+        record_failed_publication_attempt(rfctobe, msg)
+        return
 
     repo = GithubRepository(rfctobe.repository)
     # Check that head commit matches expected_head. This check defines the instant
     # after which commits to the repository will be ignored for this publication
     # attempt.
     if repo.ref != expected_head:
-        msg = (
+        raise PublicationError(
             f"Cannot publish because HEAD of {rfctobe.repository} repo moved "
             f"(expected {expected_head}, found {repo.ref})"
         )
-        record_failed_publication_attempt(rfctobe, msg)
-        raise PublicationError(msg)
 
     # Call this the publication instant; actual save happens below, after datatracker
     # accepts the metadata update
@@ -302,10 +318,9 @@ def publish_rfctobe(
         manifest = repo.get_manifest()
     except TemporaryRepositoryError as err:
         raise TemporaryPublicationError("Error retrieving manifest") from err
-    except RepositoryError as err:
-        msg = "Invalid or missing manifest"
-        record_failed_publication_attempt(rfctobe, msg)
-        raise PublicationError(msg) from err
+    except RepositoryError:
+        record_failed_publication_attempt(rfctobe, "Invalid or missing manifest")
+        return
     publications = manifest["publications"]
     for publication in publications:
         if rfctobe.rfc_number == publication["rfcNumber"]:
@@ -313,9 +328,14 @@ def publish_rfctobe(
     else:
         msg = f"Manifest does not contain RFC {rfctobe.rfc_number}"
         record_failed_publication_attempt(rfctobe, msg)
-        raise PublicationError(msg)
-    # Choose files + validate that we have what we need / no ambiguities
-    chosen_files = choose_files(publication["files"])
+        return
+
+    try:
+        chosen_files = choose_files(publication["files"])
+    except (MissingFilesError, AmbiguousFilesError) as err:
+        record_failed_publication_attempt(rfctobe, str(err))
+        return
+
     downloaded_files = {}
     # Download the selected files to a temp directory
     with TemporaryDirectory(delete=not settings.DEBUG) as tmpdirname:
@@ -345,29 +365,23 @@ def publish_rfctobe(
             try:
                 data = json.loads(api_error.body)
             except JSONDecodeError:
-                record_failed_publication_attempt(
-                    rfctobe,
-                    "An unknown datatracker error occurred",
-                )
-                raise PublicationError("unable to parse error body") from api_error
+                raise PublicationError(
+                    "An unknown datatracker error occurred"
+                ) from api_error
             # Sort out what's going on via error code
             error_codes = {err["code"] for err in data.get("errors", [])}
             if "invalid-draft" in error_codes:
-                record_failed_publication_attempt(
-                    rfctobe,
-                    "Draft name was not recognized by datatracker",
-                )
-                raise InvalidDraftError from api_error
+                raise InvalidDraftError(
+                    "Draft name was not recognized by datatracker"
+                ) from api_error
             elif "already-published-draft" in error_codes:
-                record_failed_publication_attempt(
-                    rfctobe,
-                    "Draft was already published according to datatracker",
-                )
-                raise AlreadyPublishedDraftError from api_error
+                raise AlreadyPublishedDraftError(
+                    "Draft was already published according to datatracker"
+                ) from api_error
             else:
-                msg = f"Publication failed: codes={error_codes}"
-                record_failed_publication_attempt(rfctobe, msg)
-                raise PublicationError(msg) from api_error
+                raise PublicationError(
+                    f"Publication failed: codes={error_codes}"
+                ) from api_error
         # Datatracker accepted it, so mark the RfcToBe as published. N.b., we set
         # the published_at timestamp and other publication fields earlier.
         rfctobe.disposition_id = "published"

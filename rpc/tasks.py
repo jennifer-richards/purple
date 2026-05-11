@@ -15,9 +15,9 @@ from utils.task_utils import RetryTask
 from .lifecycle.metadata import Metadata
 from .lifecycle.notifications import process_rfctobe_changes_for_queue
 from .lifecycle.publication import (
-    PublicationError,
     TemporaryPublicationError,
     publish_rfctobe,
+    record_failed_publication_attempt,
 )
 from .lifecycle.repo import GithubRepository
 from .models import (
@@ -177,21 +177,31 @@ def validate_metadata_task(self, rfc_to_be_id):
 
 
 class PublishRfcToBeTask(RetryTask):
-    pass
+    def on_failure(self, exc, task_id, args, kwargs, einfo):
+        super().on_failure(exc, task_id, args, kwargs, einfo)
+        rfctobe_id = args[0] if args else kwargs.get("rfctobe_id")
+        if rfctobe_id is None:
+            return
+        try:
+            from .models import RfcToBe
+
+            rfctobe = RfcToBe.objects.get(pk=rfctobe_id)
+            record_failed_publication_attempt(rfctobe, str(exc) or repr(exc))
+        except Exception:
+            logger.exception(
+                "Failed to record publication failure for rfctobe_id=%s", rfctobe_id
+            )
 
 
 @shared_task(
     bind=True,
     base=PublishRfcToBeTask,
-    throws=(RfcToBe.DoesNotExist, PublicationError),
+    throws=(RfcToBe.DoesNotExist,),
     autoretry_for=(TemporaryPublicationError,),
 )
 def publish_rfctobe_task(self, rfctobe_id, expected_head):
     rfctobe = RfcToBe.objects.get(pk=rfctobe_id)
     publish_rfctobe(rfctobe, expected_head=expected_head)
-
-    # Submit to crossref
-    crossref_submission_task.delay(rfctobe_id=rfctobe_id)
 
 
 @shared_task
