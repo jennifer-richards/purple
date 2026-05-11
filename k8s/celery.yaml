@@ -47,6 +47,10 @@ spec:
             readOnlyRootFilesystem: true
             runAsUser: 1000
             runAsGroup: 1000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 700Mi
       volumes:
         - name: celery-tmp
           emptyDir:

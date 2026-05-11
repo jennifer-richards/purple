@@ -56,6 +56,10 @@ spec:
             readOnlyRootFilesystem: true
             runAsUser: 1000
             runAsGroup: 1000
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
         # -----------------------------------------------------
         # Frontend Container
         # -----------------------------------------------------
@@ -88,6 +92,10 @@ spec:
             readOnlyRootFilesystem: true
             runAsUser: 1000
             runAsGroup: 1000
+          resources:
+            requests:
+              cpu: 10m
+              memory: 50Mi
         # -----------------------------------------------------
         # Statics Container
         # -----------------------------------------------------
@@ -103,6 +111,10 @@ spec:
           volumeMounts:
             - name: statics-tmp
               mountPath: /tmp
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
         # -----------------------------------------------------
         # Nginx Container
         # -----------------------------------------------------
@@ -128,6 +140,10 @@ spec:
             - name: purple-cfg
               mountPath: /etc/nginx/conf.d/default.conf
               subPath: nginx-purple.conf
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
       initContainers:
         - name: migration
           image: "ghcr.io/ietf-tools/purple-backend:$APP_IMAGE_TAG"
