@@ -46,7 +46,7 @@
         <div :class="step.showDeleteAndRetryButton ? 'flex justify-between' : 'text-center'">
           <BaseButton v-if="step.showDeleteAndRetryButton" btn-type="outline"
             @click="deleteMetadataValidationAndRetry(step.showDeleteAndRetryButton.headSha)">
-            Retry metadata validation
+            Re-fetch and validate again
           </BaseButton>
           <BaseButton v-if="step.showResyncButton" btn-type="default" @click="fetchAndVerifyMetadata" class="ml-2">
             Try again
@@ -271,7 +271,7 @@ const { data: rfcToBe, error: rfcToBeError, status: rfcToBeStatus, refresh: rfcT
   }
 )
 
-const { data: metadataValidationResults, error: metadataValidationResultsError, status: metadataValidationResultsStatus } = await useAsyncData(
+const { data: metadataValidationResults, error: metadataValidationResultsError, status: metadataValidationResultsStatus, refresh: metadataValidationResultsRefresh } = await useAsyncData(
   () => `draft-${draftName.value}-metadata-validation-results`,
   () => api.documentsMetadataValidationResultsList({
     draftName: draftName.value,
@@ -316,11 +316,11 @@ watch([rfcToBe, rfcToBeStatus, metadataValidationResultsStatus, publicationStatu
   if (
     rfcToBeStatus.value === 'error'
   ) {
-    let precomputedResult = metadataValidationResults.value as unknown
+    const precomputedResult = metadataValidationResults.value?.[0]
     step.value = {
       type: 'error',
       errorText: `Unable to load RFC ${draftName.value}. Server error: ${rfcToBeError.value?.message ?? ''} ${metadataValidationResultsError.value ?? ''}`,
-      showDeleteAndRetryButton: isMetadataValidationResults(precomputedResult) ? { headSha: precomputedResult.headSha! } : undefined,
+      showDeleteAndRetryButton: precomputedResult?.headSha ? { headSha: precomputedResult.headSha } : undefined,
       showResyncButton: true
     }
     return
@@ -340,6 +340,7 @@ watch([rfcToBe, rfcToBeStatus, metadataValidationResultsStatus, publicationStatu
         setTimeout(publicationStatusRefresh, PUBLICATION_STATUS_POLL_INTERVAL_MS)
         return
       case 'failed':
+        snackbar.add({ type: 'error', title: 'Publication failed', text: publicationStatus.value.detail })
         step.value = {
           type: 'publicationFailed',
           errorText: publicationStatus.value.detail,
@@ -429,7 +430,7 @@ const fetchAndVerifyMetadata = async () => {
     step.value = {
       type: 'error',
       errorText: `Couldn't start/poll for metadata sync results. Error: ${error}`,
-      showDeleteAndRetryButton: resultsCreate ? { headSha: resultsCreate.headSha! } : undefined,
+      showDeleteAndRetryButton: resultsCreate?.headSha ? { headSha: resultsCreate.headSha } : undefined,
       showResyncButton: true
     }
     if (!resultsCreate) {
@@ -442,7 +443,9 @@ const fetchAndVerifyMetadata = async () => {
   if (resultsCreate.status !== 'success' && resultsCreate.status !== 'failed') {
     step.value = {
       type: 'error',
-      errorText: `Failed to validate metadata. Request status was still ${JSON.stringify(resultsCreate.status)}.`,
+      errorText: `Failed to validate metadata. Request status was still
+      ${JSON.stringify(resultsCreate.status)} after ${MAXIMUM_ATTEMPTS_DURATION_MS / 1000}
+      seconds.`,
       showResyncButton: true
     }
     return
@@ -456,10 +459,13 @@ const fetchAndVerifyMetadata = async () => {
 
 const deleteMetadataValidationAndRetry = async (headSha: string) => {
   step.value = { type: 'loading' }
+  // Refresh first — the stored head_sha may be stale if the task ran after page load.
+  await metadataValidationResultsRefresh()
+  const currentHeadSha = metadataValidationResults.value?.[0]?.headSha || headSha
   try {
     await api.metadataValidationResultsDelete({
       draftName: draftName.value,
-      headSha,
+      headSha: currentHeadSha,
     })
   } catch (error: unknown) {
     snackbarForErrors({ snackbar, error, defaultTitle: "Couldn't delete validation results" })
