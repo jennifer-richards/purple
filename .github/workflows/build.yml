@@ -1,4 +1,7 @@
-name: Build K8s Images
+name: Build and Deploy Purple
+run-name: |
+  [${{ inputs.deploy == 'Skip' && 'Dev' || inputs.deploy }}] Build + Deploy Purple ${{ github.run_number }} of branch ${{ github.ref_name }} by @${{ github.actor }}
+
 on:
   workflow_dispatch:
     inputs:
