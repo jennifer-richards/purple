@@ -43,95 +43,61 @@ def notify_queue_precompute():
 
 
 def get_updated_rfcs_since(current_check_time):
-    """Helper function to get IDs of in-progress RFCs updated since last check"""
+    """Return a queryset of in-queue RFCs updated since last check."""
 
-    def _should_notify_queue(rfc):
-        """Check if RFC should be included in queue notifications"""
+    candidate_ids = set()
 
-        return rfc and rfc.disposition and rfc.disposition.slug == "in_progress"
-
-    # Track affected RFCs for queue notifications (in_progress RFCs)
-    queue_rfcs = set()
-
-    # Check RfcToBe direct changes
-    for hist in RfcToBe.history.filter(
-        history_date__gt=current_check_time
-    ).select_related("disposition", "draft"):
-        if _should_notify_queue(hist):
-            queue_rfcs.add(hist.id)
-
-    # Check Assignment changes
-    for hist in Assignment.history.filter(
-        history_date__gt=current_check_time
-    ).select_related("rfc_to_be__disposition"):
-        if _should_notify_queue(hist.rfc_to_be):
-            queue_rfcs.add(hist.rfc_to_be.id)
-
-    # Check RfcAuthor changes
-    for hist in RfcAuthor.history.filter(
-        history_date__gt=current_check_time
-    ).select_related("rfc_to_be__disposition"):
-        if _should_notify_queue(hist.rfc_to_be):
-            queue_rfcs.add(hist.rfc_to_be.id)
-
-    # Check RpcRelatedDocument changes
-    for hist in RpcRelatedDocument.history.filter(
-        history_date__gt=current_check_time
-    ).select_related("source", "source__disposition"):
-        if _should_notify_queue(hist.source):
-            queue_rfcs.add(hist.source.id)
-
-    # Check AdditionalEmail changes
-    for hist in AdditionalEmail.history.filter(
-        history_date__gt=current_check_time
-    ).select_related("rfc_to_be__disposition"):
-        if _should_notify_queue(hist.rfc_to_be):
-            queue_rfcs.add(hist.rfc_to_be.id)
-
-    # Check ClusterMembership changes
-    for hist in ClusterMember.history.filter(
-        history_date__gt=current_check_time
-    ).select_related("doc"):
-        rfcs = RfcToBe.objects.filter(draft=hist.doc).select_related("disposition")
-        for rfc in rfcs:
-            if _should_notify_queue(rfc):
-                queue_rfcs.add(rfc.id)
-
-    # Check SubseriesMember changes
-    for hist in SubseriesMember.history.filter(
-        history_date__gt=current_check_time
-    ).select_related("rfc_to_be__disposition"):
-        if _should_notify_queue(hist.rfc_to_be):
-            queue_rfcs.add(hist.rfc_to_be.id)
-
-    # Check FinalApproval changes
-    for hist in FinalApproval.history.filter(
-        history_date__gt=current_check_time
-    ).select_related("rfc_to_be__disposition"):
-        if _should_notify_queue(hist.rfc_to_be):
-            queue_rfcs.add(hist.rfc_to_be.id)
-
-    return queue_rfcs
-
-
-def get_recent_changes(check_time):
-    """Check if any relevant changes have occurred since the check time"""
-
-    return (
-        RfcToBe.history.filter(history_date__gt=check_time).exists()
-        or Assignment.history.filter(history_date__gt=check_time).exists()
-        or RfcAuthor.history.filter(history_date__gt=check_time).exists()
-        or RpcRelatedDocument.history.filter(history_date__gt=check_time).exists()
-        or AdditionalEmail.history.filter(history_date__gt=check_time).exists()
-        or ClusterMember.history.filter(history_date__gt=check_time).exists()
-        or SubseriesMember.history.filter(history_date__gt=check_time).exists()
-        or FinalApproval.history.filter(history_date__gt=check_time).exists()
+    candidate_ids.update(
+        RfcToBe.history.filter(history_date__gt=current_check_time).values_list(
+            "id", flat=True
+        )
     )
+    candidate_ids.update(
+        Assignment.history.filter(history_date__gt=current_check_time)
+        .exclude(rfc_to_be=None)
+        .values_list("rfc_to_be", flat=True)
+    )
+    candidate_ids.update(
+        RfcAuthor.history.filter(history_date__gt=current_check_time)
+        .exclude(rfc_to_be=None)
+        .values_list("rfc_to_be", flat=True)
+    )
+    candidate_ids.update(
+        RpcRelatedDocument.history.filter(history_date__gt=current_check_time)
+        .exclude(source=None)
+        .values_list("source", flat=True)
+    )
+    candidate_ids.update(
+        AdditionalEmail.history.filter(history_date__gt=current_check_time)
+        .exclude(rfc_to_be=None)
+        .values_list("rfc_to_be", flat=True)
+    )
+    doc_ids = set(
+        ClusterMember.history.filter(history_date__gt=current_check_time)
+        .exclude(doc=None)
+        .values_list("doc", flat=True)
+    )
+    if doc_ids:
+        candidate_ids.update(
+            RfcToBe.objects.filter(draft__in=doc_ids).values_list("id", flat=True)
+        )
+    candidate_ids.update(
+        SubseriesMember.history.filter(history_date__gt=current_check_time)
+        .exclude(rfc_to_be=None)
+        .values_list("rfc_to_be", flat=True)
+    )
+    candidate_ids.update(
+        FinalApproval.history.filter(history_date__gt=current_check_time)
+        .exclude(rfc_to_be=None)
+        .values_list("rfc_to_be", flat=True)
+    )
+
+    return RfcToBe.objects.in_queue().filter(pk__in=candidate_ids)
 
 
 def process_rfctobe_changes_for_queue():
     """Poll history tables and send batched notification to queue system about
-    in-progress RFC changes"""
+    in-queue RFC changes"""
 
     logger.info("Processing RfcToBe changes from history")
 
@@ -152,9 +118,7 @@ def process_rfctobe_changes_for_queue():
         recent_change_threshold = current_check_time - timezone.timedelta(minutes=1)
 
         # Check for recent changes - if changes happened in last minute, abort
-        recent_changes_exist = get_recent_changes(recent_change_threshold)
-
-        if recent_changes_exist:
+        if get_updated_rfcs_since(recent_change_threshold).exists():
             logger.info(
                 "Changes detected in last minute, skipping notification to avoid "
                 "notifying during active edits"
@@ -167,11 +131,11 @@ def process_rfctobe_changes_for_queue():
 
         queue_rfcs = get_updated_rfcs_since(last_check)
 
-        if queue_rfcs:
-            logger.info("Sending queue precompute notification for updated RFCs")
+        if queue_rfcs.exists():
+            logger.info("Sending queue precompute notification to update in-queue RFCs")
             notify_queue_precompute()
         else:
-            logger.info("No in-progress RFCs changed")
+            logger.info("No in-queue RFCs changed")
 
         task_run.last_run_at = current_check_time
         logger.info("Completed processing history changes")
