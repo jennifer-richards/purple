@@ -1,3 +1,4 @@
+import datetime
 import logging
 
 import requests
@@ -119,7 +120,7 @@ def get_updated_rfcs_since(current_check_time):
         .values_list("rfc_to_be", flat=True)
     )
 
-    return RfcToBe.objects.in_queue().filter(pk__in=candidate_ids)
+    return RfcToBe.objects.filter(pk__in=candidate_ids)
 
 
 def process_rfctobe_changes_for_queue():
@@ -142,7 +143,7 @@ def process_rfctobe_changes_for_queue():
         task_run.save()
 
     try:
-        recent_change_threshold = current_check_time - timezone.timedelta(minutes=1)
+        recent_change_threshold = current_check_time - datetime.timedelta(minutes=1)
 
         # Check for recent changes - if changes happened in last minute, abort
         if get_updated_rfcs_since(recent_change_threshold).exists():
