@@ -1,10 +1,13 @@
 import logging
 
 import requests
+import rpcapi_client
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from datatracker.models import DatatrackerPerson
+from datatracker.rpcapi import with_rpcapi
 from rpc.models import (
     AdditionalEmail,
     Assignment,
@@ -18,6 +21,30 @@ from rpc.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def build_public_queue_payload() -> list:
+    """Build the same payload as the pubq/queue API endpoint."""
+    from rpc.api import PublicQueueList, _collect_queue_person_ids
+
+    queryset = list(PublicQueueList.queryset.all())
+    DatatrackerPerson.warm_cache(_collect_queue_person_ids(queryset))
+    return PublicQueueList.serializer_class(queryset, many=True).data
+
+
+def notify_datatracker_queue():
+    """Push the full public queue payload to the Datatracker queue endpoint."""
+    payload = build_public_queue_payload()
+    logger.info("Pushing queue payload to Datatracker")
+
+    @with_rpcapi
+    def _push(*, rpcapi):
+        rpcapi.process_rpc_queue(rpcapi_client.RpcQueueDataRequest(data=payload))
+
+    _push()
+    logger.info(
+        "Successfully pushed queue payload to Datatracker (%d items)", len(payload)
+    )
 
 
 def notify_queue_precompute():
@@ -134,6 +161,8 @@ def process_rfctobe_changes_for_queue():
         if queue_rfcs.exists():
             logger.info("Sending queue precompute notification to update in-queue RFCs")
             notify_queue_precompute()
+            if getattr(settings, "NOTIFY_DT_QUEUE_ENABLED", True):
+                notify_datatracker_queue()
         else:
             logger.info("No in-queue RFCs changed")
 
