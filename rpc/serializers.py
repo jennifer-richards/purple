@@ -1241,8 +1241,16 @@ class RpcRelatedDocumentSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.BooleanField())
     def get_target_is_received(self, obj: RpcRelatedDocument) -> bool:
-        """True if the target document has an RfcToBe."""
-        return obj.target_rfctobe is not None
+        """True if the target document has a non-withdrawn RfcToBe."""
+        if obj.target_rfctobe is not None:
+            return obj.target_rfctobe.disposition_id != "withdrawn"
+        if obj.target_document is not None:
+            return (
+                RfcToBe.objects.filter(draft=obj.target_document)
+                .exclude(disposition__slug="withdrawn")
+                .exists()
+            )
+        return False
 
     @extend_schema_field(serializers.BooleanField())
     def get_target_is_blocked(self, obj: RpcRelatedDocument) -> bool:
