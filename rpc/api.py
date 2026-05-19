@@ -678,6 +678,14 @@ class QueueFilter(django_filters.FilterSet):
         "at least one pending final approval, false returns drafts where all final "
         "approvals are approved.",
     )
+    pending_final_review = django_filters.BooleanFilter(
+        method="filter_pending_final_review",
+        help_text="Filter by pending final review status. True returns drafts with "
+        "at least one pending author approval (FinalApproval) or at least one "
+        "uncompleted action holder. False returns drafts where at least one author "
+        "approval exists, all author approvals are done, and no action holders are "
+        "uncompleted.",
+    )
 
     def filter_pending_final_approval(self, queryset, name, value):
         if value is True:
@@ -694,9 +702,29 @@ class QueueFilter(django_filters.FilterSet):
             )
         return queryset
 
+    def filter_pending_final_review(self, queryset, name, value):
+        if value is True:
+            # has at least one pending FinalApproval OR an uncompleted ActionHolder
+            return queryset.filter(
+                Q(finalapproval__isnull=False, finalapproval__approved__isnull=True)
+                | Q(
+                    actionholder_set__isnull=False,
+                    actionholder_set__completed__isnull=True,
+                )
+            ).distinct()
+        elif value is False:
+            # ALL FinalApprovals are approved and no uncompleted ActionHolders
+            return (
+                queryset.filter(finalapproval__isnull=False)
+                .exclude(finalapproval__approved__isnull=True)
+                .exclude(actionholder_set__completed__isnull=True)
+                .distinct()
+            )
+        return queryset
+
     class Meta:
         model = RfcToBe
-        fields = ["disposition", "pending_final_approval"]
+        fields = ["disposition", "pending_final_approval", "pending_final_review"]
 
 
 @extend_schema(operation_id="queue_counts", responses={200: QueueCountsSerializer})

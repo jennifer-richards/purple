@@ -64,6 +64,14 @@ paths:
         description: Filter by pending final approval status, true returns drafts
           with at least one pending final approval, false returns drafts where all
           final approvals are approved.
+      - in: query
+        name: pending_final_review
+        schema:
+          type: boolean
+        description: Filter by pending final review status. True returns drafts with
+          at least one pending author approval (FinalApproval) or at least one uncompleted
+          action holder. False returns drafts where at least one author approval exists,
+          all author approvals are done, and no action holders are uncompleted.
       tags:
       - purple
       security:
@@ -2621,6 +2629,14 @@ paths:
         description: Filter by pending final approval status, true returns drafts
           with at least one pending final approval, false returns drafts where all
           final approvals are approved.
+      - in: query
+        name: pending_final_review
+        schema:
+          type: boolean
+        description: Filter by pending final review status. True returns drafts with
+          at least one pending author approval (FinalApproval) or at least one uncompleted
+          action holder. False returns drafts where at least one author approval exists,
+          all author approvals are done, and no action holders are uncompleted.
       tags:
       - purple
       security:
