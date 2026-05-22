@@ -8,9 +8,6 @@ spec:
   selector:
     matchLabels:
       app: purple
-  strategy:
-    type: DEPLOY_STRATEGY
-    rollingUpdate: null
   template:
     metadata:
       labels:
