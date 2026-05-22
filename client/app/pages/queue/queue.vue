@@ -30,7 +30,7 @@
           </RpcTristateButton>
         </div>
       </fieldset>
-      <div class="w-64 flex flex-col gap-4">
+      <div class="flex flex-row gap-6 items-start">
         <fieldset>
           <legend class="font-bold text-sm flex items-end">
             Current Assignment Role
@@ -55,6 +55,20 @@
               <option :value="null">All Roles</option>
               <option v-for="role in allPendingRoles" :key="role" :value="role">
                 {{ role }}
+              </option>
+            </select>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend class="font-bold text-sm flex items-end">
+            IANA Status
+            <span class="text-md">&nbsp;</span>
+          </legend>
+          <div class="flex flex-col pt-1">
+            <select v-model="selectedIanaStatusFilter" :class="SELECT_STYLE">
+              <option :value="null">All Statuses</option>
+              <option v-for="status in allIanaStatuses" :key="status.slug" :value="status.slug">
+                {{ status.label }}
               </option>
             </select>
           </div>
@@ -131,7 +145,7 @@ import {
 } from '@tanstack/vue-table'
 import type { SortingState } from '@tanstack/vue-table'
 import { groupBy, uniqBy } from 'lodash-es'
-import type { Assignment, Cluster, Label, QueueItem, RpcPerson } from '~/purple_client'
+import type { Assignment, Cluster, IanaStatus, Label, QueueItem, RpcPerson } from '~/purple_client'
 import { calculatePeopleWorkload, calculateEnqueuedAtData, renderEnqueuedAt } from '~/utils/queue'
 import { type QueueTabId, type AssignmentMessageProps } from '~/utils/queue'
 import { ANCHOR_STYLE } from '~/utils/html'
@@ -162,6 +176,12 @@ const { data: people, status: peopleStatus, error: peopleError } = await useAsyn
   server: false,
   lazy: true,
   default: () => [] as RpcPerson[]
+})
+
+const { data: ianaStatuses } = await useAsyncData('iana-statuses', () => api.ianaStatusesList(), {
+  server: false,
+  lazy: true,
+  default: () => [] as IanaStatus[],
 })
 
 const needsAssignmentTristate = ref<TristateValue>(TRISTATE_MIXED)
@@ -431,6 +451,11 @@ const allPendingRoles = computed(() => {
 })
 
 const selectedPendingRoleFilter = ref(null)
+const selectedIanaStatusFilter = ref<string | null>(null)
+
+const allIanaStatuses = computed(() =>
+  ianaStatuses.value.map(s => ({ slug: s.slug, label: s.desc }))
+)
 
 const allLabelFilters = computed(() => {
   if (data.value === undefined) {
@@ -460,6 +485,7 @@ const table = useVueTable({
         selectedLabelFilters.value,
         selectedRoleFilter.value,
         selectedPendingRoleFilter.value,
+        selectedIanaStatusFilter.value,
         searchQuery.value
       ])
     },
@@ -493,6 +519,12 @@ const table = useVueTable({
     if (selectedPendingRoleFilter.value) {
       const hasRole = d.pendingActivities?.some(role => role.slug === selectedPendingRoleFilter.value)
       if (!hasRole) {
+        return false
+      }
+    }
+
+    if (selectedIanaStatusFilter.value) {
+      if (d.ianaStatus?.slug !== selectedIanaStatusFilter.value) {
         return false
       }
     }

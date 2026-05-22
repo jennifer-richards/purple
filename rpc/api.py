@@ -112,6 +112,7 @@ from .serializers import (
     DocumentCommentSerializer,
     FinalApprovalSerializer,
     HistorySerializer,
+    IanaStatusSerializer,
     LabelSerializer,
     MailMessageSerializer,
     MailResponseSerializer,
@@ -2495,6 +2496,15 @@ class RfcMailTemplatesList(views.APIView):
             ],
             many=True,
         )
+        return Response(serializer.data)
+
+
+class IanaStatusViewSet(viewsets.ViewSet):
+    """List all possible IANA status choices."""
+
+    @extend_schema(responses=IanaStatusSerializer(many=True))
+    def list(self, request):
+        serializer = IanaStatusSerializer(RfcToBe.IanaStatus.values, many=True)
         return Response(serializer.data)
 
 
