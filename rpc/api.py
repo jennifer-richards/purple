@@ -11,7 +11,7 @@ import rpcapi_client
 from django import forms
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Max, Prefetch, Q
+from django.db.models import Exists, Max, OuterRef, Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
@@ -681,11 +681,12 @@ class QueueFilter(django_filters.FilterSet):
     )
     pending_final_review = django_filters.BooleanFilter(
         method="filter_pending_final_review",
-        help_text="Filter by pending final review status. True returns drafts with "
-        "at least one pending author approval (FinalApproval) or at least one "
-        "uncompleted action holder. False returns drafts where at least one author "
-        "approval exists, all author approvals are done, and no action holders are "
-        "uncompleted.",
+        help_text="Filter by pending final review status. First filter by existing "
+        "final_review_editor assignment. Additional filters: "
+        "True returns drafts with at least one pending author approval (FinalApproval) "
+        "or at least one uncompleted action holder. False returns drafts where at "
+        "least one author approval exists, all author approvals are done, and no "
+        "action holders are uncompleted.",
     )
 
     def filter_pending_final_approval(self, queryset, name, value):
@@ -704,9 +705,19 @@ class QueueFilter(django_filters.FilterSet):
         return queryset
 
     def filter_pending_final_review(self, queryset, name, value):
+        # documents with at least one non-withdrawn final_review_editor assignment
+        has_fre = queryset.filter(
+            Exists(
+                Assignment.objects.filter(
+                    rfc_to_be=OuterRef("pk"),
+                    role__slug="final_review_editor",
+                ).exclude(state=Assignment.State.WITHDRAWN)
+            )
+        )
         if value is True:
-            # has at least one pending FinalApproval OR an uncompleted ActionHolder
-            return queryset.filter(
+            # has a final_review_editor assignment, and at least one pending
+            # FinalApproval OR an uncompleted ActionHolder
+            return has_fre.filter(
                 Q(finalapproval__isnull=False, finalapproval__approved__isnull=True)
                 | Q(
                     actionholder_set__isnull=False,
@@ -714,11 +725,15 @@ class QueueFilter(django_filters.FilterSet):
                 )
             ).distinct()
         elif value is False:
-            # ALL FinalApprovals are approved and no uncompleted ActionHolders
+            # has a final_review_editor assignment, ALL FinalApprovals are approved,
+            # and no uncompleted ActionHolders
             return (
-                queryset.filter(finalapproval__isnull=False)
+                has_fre.filter(finalapproval__isnull=False)
                 .exclude(finalapproval__approved__isnull=True)
-                .exclude(actionholder_set__completed__isnull=True)
+                .exclude(
+                    actionholder_set__isnull=False,
+                    actionholder_set__completed__isnull=True,
+                )
                 .distinct()
             )
         return queryset
