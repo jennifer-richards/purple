@@ -2,7 +2,7 @@
 Original comment:
 
 This is the template file for email messages sent to notify authors
-that their document is in AUTH48 state and available for review
+that their document is in Final Review state and available for review
 (when using an XML source file).
 The template text becomes the body of the message. (Headers are
 handled differently.)
@@ -31,9 +31,9 @@ TEXT:
 RFC Author(s):
 --------------
 
-Instructions for Completing AUTH48
+Final Review for RFC-to-be {{ rfc_to_be.rfc_number }} <{{ rfc_to_be.draft.name }}>
 
-Your document has now entered AUTH48.  Once it has been reviewed and
+Your document is now available for Final Review (previously AUTH48). Once it has been reviewed and
 approved by you and all coauthors, it will be published as an RFC.
 If an author is no longer available, there are several remedies
 available as listed in the FAQ (https://www.rfc-editor.org/faq/).
@@ -95,7 +95,7 @@ Please review the following aspects of your document:
 Submitting changes
 ------------------
 
-To submit changes, please reply to this email using ‘REPLY ALL’ as all
+To submit changes, please reply to this email using 'REPLY ALL' as all
 the parties CCed on this message need to see your changes. The parties
 include:
 
@@ -107,9 +107,9 @@ include:
       IETF Stream participants are your working group chairs, the
       responsible ADs, and the document shepherd).
 
-   *  auth48archive@rfc-editor.org, which is a new archival mailing list
-      to preserve AUTH48 conversations; it is not an active discussion
-      list:
+   *  auth48archive@rfc-editor.org, which is an archival mailing list
+      to preserve discussion about the document while in the RPC editorial
+      queue; it is not an active discussion list:
 
      *  More info:
         https://mailarchive.ietf.org/arch/msg/ietf-announce/yb6lpIGh-4Q9l2USxIAe6P8O4Zc
@@ -151,7 +151,7 @@ Approving for publication
 --------------------------
 
 To approve your RFC for publication, please reply to this email stating
-that you approve this RFC for publication.  Please use ‘REPLY ALL’,
+that you approve this RFC for publication.  Please use 'REPLY ALL',
 as all the parties CCed on this message need to see your approval.
 
 
@@ -159,24 +159,24 @@ Files
 -----
 
 The files are available here:
-   https://www.rfc-editor.org/authors/LCXXXX.xml
-   https://www.rfc-editor.org/authors/LCXXXX.html
-   https://www.rfc-editor.org/authors/LCXXXX.pdf
-   https://www.rfc-editor.org/authors/LCXXXX.txt
+   https://www.rfc-editor.org/authors/rfc{{ rfc_to_be.rfc_number }}.xml
+   https://www.rfc-editor.org/authors/rfc{{ rfc_to_be.rfc_number }}.html
+   https://www.rfc-editor.org/authors/rfc{{ rfc_to_be.rfc_number }}.pdf
+   https://www.rfc-editor.org/authors/rfc{{ rfc_to_be.rfc_number }}.txt
 
 Diff file of the text:
-   https://www.rfc-editor.org/authors/LCXXXX-diff.html
-   https://www.rfc-editor.org/authors/LCXXXX-rfcdiff.html (side by side)
+   https://www.rfc-editor.org/authors/rfc{{ rfc_to_be.rfc_number }}-diff.html
+   https://www.rfc-editor.org/authors/rfc{{ rfc_to_be.rfc_number }}-rfcdiff.html (side by side)
 
 Diff of the XML:
-   https://www.rfc-editor.org/authors/LCXXXX-xmldiff1.html
+   https://www.rfc-editor.org/authors/rfc{{ rfc_to_be.rfc_number }}-xmldiff1.html
 
 
 Tracking progress
 -----------------
 
-The details of the AUTH48 status of your document are here:
-   https://www.rfc-editor.org/auth48/LCXXXX
+Details on the status of your Final Review are here:
+   https://queue.rfc-editor.org/final-review/rfc{{ rfc_to_be.rfc_number }}/
 
 Please let us know if you have any questions.
 
