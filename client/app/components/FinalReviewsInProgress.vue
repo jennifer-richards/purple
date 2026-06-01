@@ -195,6 +195,7 @@ const columns = [
           people: props.people,
           queueItemsIsPending: pending.value,
           blockingReasons: data.row.original.blockingReasons,
+          actionholders: data.row.original.actionholderSet,
           rowForDebug: data.row.original
         })
       },
